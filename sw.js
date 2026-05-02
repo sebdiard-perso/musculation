@@ -1,5 +1,5 @@
-const CACHE_NAME = 'muscu-v3';
-const ASSETS = ['/', '/index.html', '/style.css', '/data.js', '/animations.js', '/timer.js', '/calendar.js', '/app.js', '/manifest.json'];
+const CACHE_NAME = 'muscu-v4';
+const ASSETS = ['./index.html', './style.css', './data.js', './animations.js', './timer.js', './calendar.js', './app.js', './manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)));

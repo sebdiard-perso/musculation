@@ -2,7 +2,7 @@
   "name": "MuscuTracker",
   "short_name": "Muscu",
   "description": "Suivi de séances de musculation",
-  "start_url": "/",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#1a1a2e",
   "theme_color": "#e94560",
