@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#e94560">
+  <title>MuscuTracker</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- NAV -->
+  <nav id="nav">
+    <button class="nav-btn active" data-view="workout">🏋️ Séance</button>
+    <button class="nav-btn" data-view="programs">📅 Prog</button>
+    <button class="nav-btn" data-view="calendar">📆 Cal</button>
+    <button class="nav-btn" data-view="exercises">📋 Exos</button>
+    <button class="nav-btn" data-view="history">📊 Histo</button>
+    <button class="nav-btn" data-view="settings">⚙️</button>
+  </nav>
+
+  <!-- VUE SÉANCE -->
+  <main id="view-workout" class="view active">
+    <h1>Séance en cours</h1>
+    <div id="timer-section">
+      <div id="timer-display">01:30</div>
+      <div id="timer-buttons">
+        <button onclick="app.setTimer(60)">1:00</button>
+        <button onclick="app.setTimer(90)">1:30</button>
+        <button onclick="app.setTimer(120)">2:00</button>
+        <button onclick="app.setTimer(180)">3:00</button>
+      </div>
+      <div id="timer-controls">
+        <button id="btn-timer-start" onclick="app.startTimer()">▶️ Start</button>
+        <button onclick="app.resetTimer()">🔄 Reset</button>
+      </div>
+    </div>
+    <div id="workout-log">
+      <div id="workout-exercises"></div>
+      <button id="btn-add-exo" onclick="app.showExercisePicker()">+ Ajouter un exercice</button>
+    </div>
+    <div id="workout-actions">
+      <button id="btn-finish" onclick="app.finishWorkout()">✅ Terminer la séance</button>
+    </div>
+  </main>
+
+  <!-- VUE PROGRAMMES -->
+  <main id="view-programs" class="view">
+    <h1>Programmes</h1>
+    <div id="program-list"></div>
+  </main>
+
+  <!-- VUE CALENDRIER -->
+  <main id="view-calendar" class="view">
+    <h1>Calendrier</h1>
+    <div id="calendar-nav">
+      <button onclick="app.calendarPrev()">◀</button>
+      <span id="calendar-month"></span>
+      <button onclick="app.calendarNext()">▶</button>
+    </div>
+    <div id="calendar-grid"></div>
+    <div id="calendar-detail"></div>
+  </main>
+
+  <!-- VUE EXERCICES -->
+  <main id="view-exercises" class="view">
+    <h1>Mes exercices</h1>
+    <div id="exercise-list"></div>
+    <div class="add-form">
+      <input type="text" id="new-exo-name" placeholder="Nom de l'exercice">
+      <input type="url" id="new-exo-video" placeholder="URL vidéo YouTube (optionnel)">
+      <select id="new-exo-muscle">
+        <option value="Pectoraux">Pectoraux</option>
+        <option value="Dos">Dos</option>
+        <option value="Épaules">Épaules</option>
+        <option value="Biceps">Biceps</option>
+        <option value="Triceps">Triceps</option>
+        <option value="Jambes">Jambes</option>
+        <option value="Abdos">Abdos</option>
+        <option value="Mollets">Mollets</option>
+      </select>
+      <button onclick="app.addExercise()">+ Ajouter</button>
+    </div>
+  </main>
+
+  <!-- VUE HISTORIQUE -->
+  <main id="view-history" class="view">
+    <h1>Historique</h1>
+    <div id="history-list"></div>
+  </main>
+
+  <!-- VUE RÉGLAGES -->
+  <main id="view-settings" class="view">
+    <h1>⚙️ Réglages</h1>
+    <div class="settings-section">
+      <h2>📦 Sauvegarde des données</h2>
+      <p class="settings-desc">Exporte tes données pour les transférer sur un autre appareil ou faire un backup.</p>
+      <button class="settings-btn export" onclick="app.exportData()">📤 Exporter (JSON)</button>
+      <button class="settings-btn import" onclick="app.showImportModal()">📥 Importer</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="app.importData(event)">
+    </div>
+    <div class="settings-section">
+      <h2>🗑️ Données</h2>
+      <button class="settings-btn danger" onclick="app.resetAllData()">⚠️ Réinitialiser toutes les données</button>
+    </div>
+    <div class="settings-section">
+      <h2>ℹ️ Infos</h2>
+      <p class="settings-desc">
+        <strong>Exercices :</strong> <span id="stats-exos">0</span><br>
+        <strong>Séances :</strong> <span id="stats-sessions">0</span><br>
+        <strong>Programmes custom :</strong> <span id="stats-programs">0</span>
+      </p>
+    </div>
+  </main>
+
+  <!-- MODALS -->
+  <div id="modal-picker" class="modal hidden">
+    <div class="modal-content"><h2>Choisir un exercice</h2><div id="picker-list"></div>
+      <button class="btn-close" onclick="app.closeModal()">Fermer</button></div>
+  </div>
+  <div id="modal-detail" class="modal hidden">
+    <div class="modal-content"><h2>Détail séance</h2><div id="detail-content"></div>
+      <button class="btn-close" onclick="app.closeDetailModal()">Fermer</button></div>
+  </div>
+  <div id="modal-video" class="modal hidden">
+    <div class="modal-content modal-video-content">
+      <div class="video-wrapper"><iframe id="video-iframe" src="" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>
+      <button class="btn-close" onclick="app.closeVideo()">Fermer</button></div>
+  </div>
+  <div id="modal-exo-desc" class="modal hidden">
+    <div class="modal-content"><h2 id="desc-title"></h2><div id="desc-content"></div>
+      <button class="btn-close" onclick="document.getElementById('modal-exo-desc').classList.add('hidden')">Fermer</button></div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="animations.js"></script>
+  <script src="timer.js"></script>
+  <script src="calendar.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
