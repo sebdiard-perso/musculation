@@ -55,14 +55,25 @@ const app = {
   setupNav() {
     document.querySelectorAll('.nav-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById(`view-${btn.dataset.view}`).classList.add('active');
-        if (btn.dataset.view === 'calendar') calendar.render(this.history);
-        if (btn.dataset.view === 'settings') this.updateStats();
+        this.goTo(btn.dataset.view);
       });
     });
+  },
+
+  goTo(view) {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    const navBtn = document.querySelector(`[data-view="${view}"]`);
+    if (navBtn) navBtn.classList.add('active');
+    // Sous-vues : garder "Plus" actif
+    if (['calendar','exercises','history','settings'].includes(view)) {
+      const moreBtn = document.querySelector('[data-view="more"]');
+      if (moreBtn) moreBtn.classList.add('active');
+    }
+    document.getElementById(`view-${view}`).classList.add('active');
+    if (view === 'calendar') calendar.render(this.history);
+    if (view === 'settings') this.updateStats();
+    window.scrollTo(0, 0);
   },
 
   saveExercises() { localStorage.setItem('exercises', JSON.stringify(this.exercises)); },
@@ -335,10 +346,23 @@ const app = {
     this.renderPrograms();
   },
 
+  guidedMode: false,
+  guidedExoIndex: 0,
+  guidedSetIndex: 0,
+  restTime: 90,
+  restBetweenExos: 180,
+  restPauseCount: 0,
+
   startProgramDay(pid, di) {
     const prog = this.getAllPrograms().find(p => p.id === pid);
     if (!prog) return;
     const day = prog.days[di];
+
+    const rest = prompt('Temps de repos entre les séries (secondes) :', '90');
+    if (rest === null) return;
+    this.restTime = parseInt(rest) || 90;
+    this.restBetweenExos = 180;
+
     this.currentWorkout = day.exercises.map(pe => {
       const exo = this.exercises.find(e => e.name === pe.name);
       const sug = this.getSuggestedWeight(pe.name);
@@ -353,11 +377,167 @@ const app = {
       return { exerciseId: exo ? exo.id : 0, name: pe.name, muscle: exo ? exo.muscle : '',
         video: exo ? exo.video || '' : '', targetReps: pe.reps, suggestion: sug, sets };
     });
+
+    this.guidedMode = true;
+    this.guidedExoIndex = 0;
+    this.guidedSetIndex = 0;
+    this.restPauseCount = 0;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelector('[data-view="workout"]').classList.add('active');
     document.getElementById('view-workout').classList.add('active');
-    this.renderWorkout();
+    document.getElementById('workout-free').classList.add('hidden');
+    document.getElementById('workout-guided').classList.remove('hidden');
+    this.renderGuided();
+  },
+
+  renderGuided() {
+    const exo = this.currentWorkout[this.guidedExoIndex];
+    if (!exo) return;
+    const set = exo.sets[this.guidedSetIndex];
+    if (!set) return;
+    const totalExos = this.currentWorkout.length;
+    const totalSets = exo.sets.length;
+    const tech = set.technique ? DATA.techniques[set.technique] : null;
+    const isRestPause = set.technique === 'rest-pause';
+
+    // Progress dots (exercices)
+    document.getElementById('guided-progress').innerHTML = this.currentWorkout.map((e, i) => {
+      const done = e.sets.every(s => s.feeling);
+      const cls = i === this.guidedExoIndex ? 'active' : (done ? 'done' : '');
+      return `<div class="progress-dot ${cls}">${i + 1}</div>`;
+    }).join('');
+
+    // Animation
+    document.getElementById('guided-animation').innerHTML = ANIMATIONS.get(exo.name);
+
+    // Nom + muscle
+    document.getElementById('guided-exo-name').textContent = exo.name;
+    document.getElementById('guided-exo-muscle').innerHTML =
+      `${exo.muscle}${exo.targetReps ? ` — Objectif : ${exo.targetReps}` : ''}`;
+
+    // Série en cours
+    const rpLabel = isRestPause && this.restPauseCount > 0 ? ` (rest-pause ${this.restPauseCount}/3)` : '';
+    const techBadge = tech
+      ? `<div class="technique-badge" style="border-color:${tech.color};color:${tech.color};margin-bottom:12px">${tech.emoji} ${tech.label}<span class="tech-desc">${tech.desc}</span></div>`
+      : '';
+
+    document.getElementById('guided-current-set').innerHTML = `
+      ${techBadge}
+      <div class="guided-set-label">Série ${this.guidedSetIndex + 1} / ${totalSets}${rpLabel}</div>
+      <div class="guided-set-sub">Exercice ${this.guidedExoIndex + 1} / ${totalExos}</div>
+      <div class="guided-inputs">
+        <div class="guided-input-group">
+          <label>Poids</label>
+          <input type="number" inputmode="decimal" value="${set.kg}" placeholder="0"
+            onchange="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].kg=this.value">
+        </div>
+        <div class="guided-input-group">
+          <label>Reps</label>
+          <input type="number" inputmode="numeric" value="${set.reps}" placeholder="0"
+            onchange="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].reps=this.value">
+        </div>
+      </div>
+      <div class="guided-feeling">
+        <button class="${set.feeling==='easy'?'active easy':''}" onclick="app.guidedSetFeeling('easy')">😎 Facile</button>
+        <button class="${set.feeling==='correct'?'active correct':''}" onclick="app.guidedSetFeeling('correct')">👍 OK</button>
+        <button class="${set.feeling==='hard'?'active hard':''}" onclick="app.guidedSetFeeling('hard')">😤 Dur</button>
+        <button class="${set.feeling==='fail'?'active fail':''}" onclick="app.guidedSetFeeling('fail')">❌ Raté</button>
+      </div>
+    `;
+
+    // Bouton suivant
+    const isLastSet = this.guidedSetIndex === totalSets - 1;
+    const isLastExo = this.guidedExoIndex === totalExos - 1;
+    let btnText;
+    if (isRestPause && this.restPauseCount < 3) btnText = `⏱️ Rest-Pause ${this.restPauseCount + 1}/3 (15s)`;
+    else if (isLastSet && isLastExo) btnText = '✅ Terminer la séance';
+    else if (isLastSet) btnText = 'Exercice suivant ▶ (3min)';
+    else btnText = 'Série suivante ▶';
+    document.getElementById('guided-next').textContent = btnText;
+  },
+
+  guidedSetFeeling(feeling) {
+    const set = this.currentWorkout[this.guidedExoIndex].sets[this.guidedSetIndex];
+    set.feeling = feeling;
+    this.renderGuided();
+  },
+
+  showTimerPopup(label) {
+    document.getElementById('guided-timer-label').textContent = label || 'Repos';
+    document.getElementById('guided-timer-pause').textContent = '⏸️ Pause';
+    document.getElementById('guided-timer').classList.remove('hidden');
+  },
+
+  hideTimerPopup() {
+    document.getElementById('guided-timer').classList.add('hidden');
+  },
+
+  skipTimer() {
+    const cb = timer.onEnd;
+    timer.stop();
+    timer.setTimerClass('');
+    timer.onEnd = null;
+    this.hideTimerPopup();
+    if (cb) cb();
+  },
+
+  pauseTimer() {
+    const btn = document.getElementById('guided-timer-pause');
+    if (timer.interval) {
+      timer.stop();
+      timer.setTimerClass('');
+      btn.textContent = '▶️ Reprendre';
+    } else {
+      timer.resume();
+      btn.textContent = '⏸️ Pause';
+    }
+  },
+
+  guidedNext() {
+    const exo = this.currentWorkout[this.guidedExoIndex];
+    const set = exo.sets[this.guidedSetIndex];
+    const isRestPause = set.technique === 'rest-pause';
+    const isLastSet = this.guidedSetIndex === exo.sets.length - 1;
+    const isLastExo = this.guidedExoIndex === this.currentWorkout.length - 1;
+
+    // Rest-pause : d'abord la série normale (count=0), puis 3 rounds de 15s
+    if (isRestPause && this.restPauseCount < 3) {
+      this.restPauseCount++;
+      this.showTimerPopup(`Rest-Pause ${this.restPauseCount}/3`);
+      timer.onEnd = () => { this.hideTimerPopup(); this.renderGuided(); };
+      timer.autoStart(15);
+      this.renderGuided();
+      return;
+    }
+
+    this.restPauseCount = 0;
+
+    if (isLastSet && isLastExo) {
+      this.finishWorkout();
+      return;
+    }
+
+    if (isLastSet) {
+      // Charger l'exercice suivant d'abord, puis popup timer 3 min
+      this.guidedExoIndex++;
+      this.guidedSetIndex = 0;
+      this.renderGuided();
+      window.scrollTo(0, 0);
+      this.showTimerPopup('Repos entre exercices');
+      timer.onEnd = () => this.hideTimerPopup();
+      timer.autoStart(this.restBetweenExos);
+    } else {
+      // Popup timer repos puis série suivante
+      this.showTimerPopup('Repos');
+      timer.onEnd = () => {
+        this.hideTimerPopup();
+        this.guidedSetIndex++;
+        this.renderGuided();
+        window.scrollTo(0, 0);
+      };
+      timer.autoStart(this.restTime);
+    }
   },
 
   // WORKOUT
@@ -451,10 +631,15 @@ const app = {
     this.history.unshift({ id: Date.now(), date: new Date().toISOString(), exercises: JSON.parse(JSON.stringify(this.currentWorkout)) });
     this.saveHistory();
 
-    // Proposer ajustement de poids
     this.proposeWeightAdjustments();
 
     this.currentWorkout = [];
+    this.guidedMode = false;
+    this.guidedExoIndex = 0;
+    this.guidedSetIndex = 0;
+    this.restPauseCount = 0;
+    document.getElementById('workout-free').classList.remove('hidden');
+    document.getElementById('workout-guided').classList.add('hidden');
     this.renderWorkout();
     this.renderHistory();
     this.renderExercises();

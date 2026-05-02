@@ -15,35 +15,54 @@
   <!-- NAV -->
   <nav id="nav">
     <button class="nav-btn active" data-view="workout">🏋️ Séance</button>
-    <button class="nav-btn" data-view="programs">📅 Prog</button>
-    <button class="nav-btn" data-view="calendar">📆 Cal</button>
-    <button class="nav-btn" data-view="exercises">📋 Exos</button>
-    <button class="nav-btn" data-view="history">📊 Histo</button>
-    <button class="nav-btn" data-view="settings">⚙️</button>
+    <button class="nav-btn" data-view="programs">📅 Programmes</button>
+    <button class="nav-btn" data-view="more">⚙️ Plus</button>
   </nav>
 
   <!-- VUE SÉANCE -->
   <main id="view-workout" class="view active">
-    <h1>Séance en cours</h1>
-    <div id="timer-section">
-      <div id="timer-display">01:30</div>
-      <div id="timer-buttons">
-        <button onclick="app.setTimer(60)">1:00</button>
-        <button onclick="app.setTimer(90)">1:30</button>
-        <button onclick="app.setTimer(120)">2:00</button>
-        <button onclick="app.setTimer(180)">3:00</button>
+    <!-- Mode libre (pas de programme) -->
+    <div id="workout-free">
+      <h1>Séance en cours</h1>
+      <div id="timer-section">
+        <div id="timer-display">01:30</div>
+        <div id="timer-buttons">
+          <button onclick="app.setTimer(60)">1:00</button>
+          <button onclick="app.setTimer(90)">1:30</button>
+          <button onclick="app.setTimer(120)">2:00</button>
+          <button onclick="app.setTimer(180)">3:00</button>
+        </div>
+        <div id="timer-controls">
+          <button id="btn-timer-start" onclick="app.startTimer()">▶️ Start</button>
+          <button onclick="app.resetTimer()">🔄 Reset</button>
+        </div>
       </div>
-      <div id="timer-controls">
-        <button id="btn-timer-start" onclick="app.startTimer()">▶️ Start</button>
-        <button onclick="app.resetTimer()">🔄 Reset</button>
+      <div id="workout-log">
+        <div id="workout-exercises"></div>
+        <button id="btn-add-exo" onclick="app.showExercisePicker()">+ Ajouter un exercice</button>
+      </div>
+      <div id="workout-actions">
+        <button id="btn-finish" onclick="app.finishWorkout()">✅ Terminer la séance</button>
       </div>
     </div>
-    <div id="workout-log">
-      <div id="workout-exercises"></div>
-      <button id="btn-add-exo" onclick="app.showExercisePicker()">+ Ajouter un exercice</button>
-    </div>
-    <div id="workout-actions">
-      <button id="btn-finish" onclick="app.finishWorkout()">✅ Terminer la séance</button>
+
+    <!-- Mode programme guidé -->
+    <div id="workout-guided" class="hidden">
+      <div id="guided-progress"></div>
+      <div id="guided-timer" class="hidden">
+        <div id="guided-timer-overlay"></div>
+        <div id="guided-timer-popup">
+          <div id="guided-timer-label">Repos</div>
+          <div id="guided-timer-display">01:30</div>
+          <button id="guided-timer-skip" onclick="app.skipTimer()">Passer ▶</button>
+          <button id="guided-timer-pause" onclick="app.pauseTimer()">⏸️ Pause</button>
+        </div>
+      </div>
+      <div id="guided-animation"></div>
+      <div id="guided-exo-name"></div>
+      <div id="guided-exo-muscle"></div>
+      <div id="guided-current-set"></div>
+      <button id="guided-next" onclick="app.guidedNext()">Suivant ▶</button>
     </div>
   </main>
 
@@ -53,9 +72,20 @@
     <div id="program-list"></div>
   </main>
 
+  <!-- VUE PLUS -->
+  <main id="view-more" class="view">
+    <h1>Plus</h1>
+    <div class="more-menu">
+      <button class="more-item" onclick="app.goTo('calendar')">📆 Calendrier</button>
+      <button class="more-item" onclick="app.goTo('exercises')">📋 Mes exercices</button>
+      <button class="more-item" onclick="app.goTo('history')">📊 Historique</button>
+      <button class="more-item" onclick="app.goTo('settings')">📦 Sauvegarde & Import</button>
+    </div>
+  </main>
+
   <!-- VUE CALENDRIER -->
-  <main id="view-calendar" class="view">
-    <h1>Calendrier</h1>
+  <main id="view-calendar" class="view sub-view">
+    <div class="sub-header"><button onclick="app.goTo('more')">◀ Retour</button><h1>Calendrier</h1></div>
     <div id="calendar-nav">
       <button onclick="app.calendarPrev()">◀</button>
       <span id="calendar-month"></span>
@@ -66,8 +96,8 @@
   </main>
 
   <!-- VUE EXERCICES -->
-  <main id="view-exercises" class="view">
-    <h1>Mes exercices</h1>
+  <main id="view-exercises" class="view sub-view">
+    <div class="sub-header"><button onclick="app.goTo('more')">◀ Retour</button><h1>Mes exercices</h1></div>
     <div id="exercise-list"></div>
     <div class="add-form">
       <input type="text" id="new-exo-name" placeholder="Nom de l'exercice">
@@ -87,14 +117,14 @@
   </main>
 
   <!-- VUE HISTORIQUE -->
-  <main id="view-history" class="view">
-    <h1>Historique</h1>
+  <main id="view-history" class="view sub-view">
+    <div class="sub-header"><button onclick="app.goTo('more')">◀ Retour</button><h1>Historique</h1></div>
     <div id="history-list"></div>
   </main>
 
   <!-- VUE RÉGLAGES -->
-  <main id="view-settings" class="view">
-    <h1>⚙️ Réglages</h1>
+  <main id="view-settings" class="view sub-view">
+    <div class="sub-header"><button onclick="app.goTo('more')">◀ Retour</button><h1>📦 Sauvegarde</h1></div>
     <div class="settings-section">
       <h2>📦 Sauvegarde des données</h2>
       <p class="settings-desc">Exporte tes données pour les transférer sur un autre appareil ou faire un backup.</p>
