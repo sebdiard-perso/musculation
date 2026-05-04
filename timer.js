@@ -18,9 +18,13 @@ const timer = {
 
   unlockAudio() {
     const unlock = () => {
-      Object.values(this.sounds).forEach(a => {
-        if (a) { a.volume = 0; a.play().then(() => { a.pause(); a.volume = 1; a.currentTime = 0; }).catch(() => {}); }
-      });
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+      ctx.resume().catch(() => {});
       document.removeEventListener('touchstart', unlock);
       document.removeEventListener('click', unlock);
     };

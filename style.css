@@ -44,6 +44,54 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
 .view { display: none; }
 .view.active { display: block; }
 
+/* HOME HERO */
+#home-hero {
+  padding: 28px 20px 16px;
+  text-align: center;
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(233,69,96,0.15) 100%);
+  margin: 0 16px 16px;
+  border-radius: var(--radius);
+}
+#home-greeting {
+  font-size: 1.6rem; font-weight: 800;
+  background: linear-gradient(135deg, var(--accent), #ff8a65);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+#home-subtitle { font-size: 0.9rem; color: var(--muted); margin-top: 4px; }
+
+/* LAST SESSION CARD */
+#home-last-session { padding: 0 16px; margin-bottom: 16px; }
+.last-session-card {
+  background: var(--surface); border-radius: var(--radius); padding: 14px 16px;
+  border-left: 4px solid var(--success); cursor: pointer;
+}
+.last-session-card .ls-title { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+.last-session-card .ls-date { font-weight: 600; margin-bottom: 4px; }
+.last-session-card .ls-summary { font-size: 0.85rem; color: var(--muted); }
+.last-session-card .ls-stats {
+  display: flex; gap: 16px; margin-top: 8px;
+}
+.ls-stat { font-size: 0.8rem; color: var(--accent); font-weight: 600; }
+
+/* QUICK ACTIONS */
+#home-quick-actions {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  padding: 0 16px; margin-bottom: 20px;
+}
+.quick-action-card {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 20px 12px; border-radius: var(--radius);
+  background: var(--surface); border: 2px solid transparent;
+  color: var(--text); font-size: 0.9rem; cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s;
+}
+.quick-action-card:active { transform: scale(0.97); }
+.quick-action-card:first-child { border-color: rgba(233,69,96,0.3); }
+.quick-action-card:last-child { border-color: rgba(78,204,163,0.3); }
+.qa-icon { font-size: 1.8rem; }
+.qa-label { font-weight: 600; text-align: center; }
+
 #timer-section {
   background: var(--surface); margin: 0 16px; padding: 20px;
   border-radius: var(--radius); text-align: center;
@@ -303,6 +351,39 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
   background: var(--accent); color: #fff; font-size: 1.2rem; font-weight: 700; cursor: pointer;
 }
 #guided-next:active { opacity: 0.8; }
+#guided-quit {
+  display: block; width: 100%; padding: 14px; margin-top: 10px;
+  border-radius: var(--radius); border: 1px solid #6a040f;
+  background: none; color: #ff6b6b; font-size: 0.9rem; cursor: pointer;
+}
+#guided-quit:active { background: rgba(106,4,15,0.3); }
+
+/* MODAL CUSTOM */
+.modal-custom-content {
+  text-align: center; padding: 32px 24px 24px;
+  border-radius: 24px 24px 0 0;
+}
+.modal-custom-content h2 { margin-bottom: 8px; }
+.modal-custom-content p { color: var(--muted); font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px; }
+#modal-custom-icon { font-size: 2.5rem; margin-bottom: 12px; }
+#modal-custom-input-wrap {
+  display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px;
+}
+#modal-custom-input {
+  width: 120px; padding: 16px; border-radius: 12px; border: 2px solid #333;
+  background: var(--bg); color: var(--text); font-size: 1.8rem; text-align: center;
+  font-weight: 700;
+}
+#modal-custom-input:focus { border-color: var(--accent); outline: none; }
+#modal-custom-unit { font-size: 1rem; color: var(--muted); }
+#modal-custom-buttons { display: flex; gap: 10px; }
+#modal-custom-buttons button {
+  flex: 1; padding: 16px; border-radius: var(--radius); border: none;
+  font-size: 1rem; font-weight: 600; cursor: pointer;
+}
+.modal-btn-cancel { background: var(--card); color: var(--muted); }
+.modal-btn-confirm { background: var(--accent); color: #fff; }
+.modal-btn-danger { background: #6a040f; color: #ffccd5; }
 
 /* SETTINGS */
 .settings-section { padding: 0 16px 20px; }
@@ -316,3 +397,57 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
 .settings-btn.export { background: var(--card); color: var(--text); }
 .settings-btn.import { background: var(--accent); color: #fff; }
 .settings-btn.danger { background: #6a040f; color: #ffccd5; }
+
+/* SPOTIFY */
+
+#spotify-presets, #spotify-custom { padding: 0 16px 16px; }
+#spotify-presets h2, #spotify-custom h2 { font-size: 1rem; margin-bottom: 10px; }
+#spotify-preset-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.spotify-preset {
+  padding: 14px 12px; border-radius: var(--radius); border: none;
+  background: var(--surface); color: var(--text); font-size: 0.9rem;
+  cursor: pointer; text-align: left; font-weight: 600;
+}
+.spotify-preset:active { background: var(--card); }
+.spotify-input-row { display: flex; gap: 8px; }
+.spotify-input-row input {
+  flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #333;
+  background: var(--surface); color: var(--text); font-size: 0.9rem;
+}
+.spotify-input-row button {
+  padding: 12px 18px; border-radius: 8px; border: none;
+  background: #1DB954; color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer;
+}
+
+/* SPOTIFY MINI PLAYER */
+#spotify-mini {
+  position: fixed; bottom: 60px; left: 0; right: 0; z-index: 99;
+  background: var(--surface); border-top: 1px solid #333;
+  padding: 6px 12px 6px 6px;
+  display: flex; align-items: center; gap: 6px;
+  animation: miniSlideUp 0.3s ease;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom));
+}
+#spotify-mini.hidden { display: none !important; }
+@keyframes miniSlideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+#spotify-mini-embed { flex: 1; border-radius: 8px; overflow: hidden; }
+#spotify-mini-embed iframe { display: block; }
+#spotify-mini-close {
+  background: none; border: none; color: var(--muted);
+  font-size: 1.1rem; cursor: pointer; padding: 8px;
+  flex-shrink: 0;
+}
+#spotify-mini-open {
+  flex: 1; padding: 14px; border-radius: 10px; border: none;
+  background: #1DB954; color: #fff; font-size: 0.9rem; font-weight: 700;
+  cursor: pointer;
+}
+#spotify-mini-open:active { opacity: 0.8; }
+.spotify-open-btn {
+  display: block; width: 100%; padding: 16px; margin-top: 12px;
+  border-radius: var(--radius); border: none;
+  background: #1DB954; color: #fff; font-size: 1rem; font-weight: 700;
+  cursor: pointer;
+}
+.spotify-open-btn:active { opacity: 0.8; }
+#spotify-open-app { padding: 0 16px; }

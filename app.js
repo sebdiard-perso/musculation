@@ -5,6 +5,36 @@ const app = {
   currentWorkout: [],
   editingProgram: null,
 
+  // CUSTOM MODAL
+  showModal({ icon, title, msg, input, unit, placeholder, confirmText, cancelText, confirmClass, onConfirm }) {
+    document.getElementById('modal-custom-icon').textContent = icon || '';
+    document.getElementById('modal-custom-title').textContent = title || '';
+    document.getElementById('modal-custom-msg').textContent = msg || '';
+    const inputWrap = document.getElementById('modal-custom-input-wrap');
+    const inputEl = document.getElementById('modal-custom-input');
+    if (input) {
+      inputWrap.classList.remove('hidden');
+      inputEl.value = input;
+      inputEl.placeholder = placeholder || '';
+      document.getElementById('modal-custom-unit').textContent = unit || '';
+      setTimeout(() => { inputEl.focus(); inputEl.select(); }, 100);
+    } else {
+      inputWrap.classList.add('hidden');
+    }
+    document.getElementById('modal-custom-buttons').innerHTML =
+      `<button class="modal-btn-cancel" id="modal-custom-cancel">${cancelText || 'Annuler'}</button>` +
+      `<button class="${confirmClass || 'modal-btn-confirm'}" id="modal-custom-ok">${confirmText || 'OK'}</button>`;
+    document.getElementById('modal-custom').classList.remove('hidden');
+    document.getElementById('modal-custom-cancel').onclick = () => this.closeCustomModal();
+    document.getElementById('modal-custom-ok').onclick = () => {
+      const val = input !== undefined ? inputEl.value : true;
+      this.closeCustomModal();
+      if (onConfirm) onConfirm(val);
+    };
+  },
+
+  closeCustomModal() { document.getElementById('modal-custom').classList.add('hidden'); },
+
   init() {
     this.migrate();
     if (!this.exercises.length) {
@@ -45,11 +75,38 @@ const app = {
   },
 
   renderAll() {
+    this.renderHome();
     this.renderExercises();
     this.renderHistory();
     this.renderWorkout();
     this.renderPrograms();
     calendar.render(this.history);
+  },
+
+  renderHome() {
+    const h = new Date().getHours();
+    const greet = h < 12 ? 'Bonjour ☀️' : h < 18 ? 'Bon après-midi 💪' : 'Bonsoir 🌙';
+    const el = document.getElementById('home-greeting');
+    if (el) el.textContent = greet;
+
+    const container = document.getElementById('home-last-session');
+    if (!container) return;
+    if (!this.history.length) {
+      container.innerHTML = `<div class="last-session-card"><div class="ls-title">Bienvenue !</div><div class="ls-summary">Aucune séance enregistrée. Lance-toi ! 🚀</div></div>`;
+      return;
+    }
+    const last = this.history[0];
+    const d = new Date(last.date);
+    const ds = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const nbExos = last.exercises.length;
+    const nbSets = last.exercises.reduce((s, e) => s + e.sets.length, 0);
+    const names = last.exercises.map(e => e.name).slice(0, 3).join(', ');
+    container.innerHTML = `<div class="last-session-card" onclick="app.showDetail(${last.id})">
+      <div class="ls-title">📊 Dernière séance</div>
+      <div class="ls-date">${ds}</div>
+      <div class="ls-summary">${names}${nbExos > 3 ? '…' : ''}</div>
+      <div class="ls-stats"><span class="ls-stat">${nbExos} exos</span><span class="ls-stat">${nbSets} séries</span></div>
+    </div>`;
   },
 
   setupNav() {
@@ -66,13 +123,15 @@ const app = {
     const navBtn = document.querySelector(`[data-view="${view}"]`);
     if (navBtn) navBtn.classList.add('active');
     // Sous-vues : garder "Plus" actif
-    if (['calendar','exercises','history','settings'].includes(view)) {
+    if (['calendar','exercises','history','settings','spotify'].includes(view)) {
       const moreBtn = document.querySelector('[data-view="more"]');
       if (moreBtn) moreBtn.classList.add('active');
     }
     document.getElementById(`view-${view}`).classList.add('active');
     if (view === 'calendar') calendar.render(this.history);
     if (view === 'settings') this.updateStats();
+    if (view === 'spotify') { this.renderSpotify(); }
+    else if (this.currentSpotifyUri) this.showSpotifyMini();
     window.scrollTo(0, 0);
   },
 
@@ -155,11 +214,17 @@ const app = {
   editDefaultKg(id) {
     const exo = this.exercises.find(e => e.id === id);
     if (!exo) return;
-    const kg = prompt(`Poids par défaut pour "${exo.name}" (kg) :`, exo.defaultKg || '');
-    if (kg === null) return;
-    exo.defaultKg = kg ? parseFloat(kg) : 0;
-    this.saveExercises();
-    this.renderExercises();
+    this.showModal({
+      icon: '⚖️', title: `Poids par défaut`,
+      msg: exo.name,
+      input: exo.defaultKg || '', unit: 'kg', placeholder: '0',
+      confirmText: 'Enregistrer',
+      onConfirm: (val) => {
+        exo.defaultKg = val ? parseFloat(val) : 0;
+        this.saveExercises();
+        this.renderExercises();
+      }
+    });
   },
 
   showExoDesc(name) {
@@ -238,10 +303,16 @@ const app = {
   },
 
   deleteProgram(id) {
-    if (!confirm('Supprimer ce programme ?')) return;
-    this.customPrograms = this.customPrograms.filter(p => p.id !== id);
-    this.saveCustomPrograms();
-    this.renderPrograms();
+    this.showModal({
+      icon: '🗑️', title: 'Supprimer ce programme ?',
+      msg: 'Cette action est irréversible.',
+      confirmText: 'Supprimer', confirmClass: 'modal-btn-danger',
+      onConfirm: () => {
+        this.customPrograms = this.customPrograms.filter(p => p.id !== id);
+        this.saveCustomPrograms();
+        this.renderPrograms();
+      }
+    });
   },
 
   openProgramEditor() {
@@ -358,11 +429,20 @@ const app = {
     if (!prog) return;
     const day = prog.days[di];
 
-    const rest = prompt('Temps de repos entre les séries (secondes) :', '90');
-    if (rest === null) return;
-    this.restTime = parseInt(rest) || 90;
-    this.restBetweenExos = 180;
+    this.showModal({
+      icon: '⏱️', title: 'Temps de repos',
+      msg: 'Combien de secondes de repos entre les séries ?',
+      input: '90', unit: 'sec', placeholder: '90',
+      confirmText: 'C\'est parti 🚀',
+      onConfirm: (val) => {
+        this.restTime = parseInt(val) || 90;
+        this.restBetweenExos = 180;
+        this._launchDay(day);
+      }
+    });
+  },
 
+  _launchDay(day) {
     this.currentWorkout = day.exercises.map(pe => {
       const exo = this.exercises.find(e => e.name === pe.name);
       const sug = this.getSuggestedWeight(pe.name);
@@ -482,6 +562,28 @@ const app = {
     if (cb) cb();
   },
 
+  quitProgram() {
+    this.showModal({
+      icon: '⚠️', title: 'Arrêter le programme ?',
+      msg: 'Les données non terminées seront perdues.',
+      confirmText: 'Arrêter', confirmClass: 'modal-btn-danger',
+      onConfirm: () => {
+        timer.stop();
+        timer.onEnd = null;
+        this.hideTimerPopup();
+        this.currentWorkout = [];
+        this.guidedMode = false;
+        this.guidedExoIndex = 0;
+        this.guidedSetIndex = 0;
+        this.restPauseCount = 0;
+        document.getElementById('workout-guided').classList.add('hidden');
+        document.getElementById('workout-free').classList.remove('hidden');
+        timer.reset();
+        this.renderHome();
+      }
+    });
+  },
+
   pauseTimer() {
     const btn = document.getElementById('guided-timer-pause');
     if (timer.interval) {
@@ -558,7 +660,19 @@ const app = {
       video: exo.video || '', targetReps: '', suggestion: sug,
       sets: [{ kg: sug ? sug.kg : '', reps: '', feeling: '', technique: '' }] });
     this.closeModal();
+    this.showWorkoutActive();
     this.renderWorkout();
+  },
+
+  showWorkoutActive() {
+    document.getElementById('workout-free').classList.add('hidden');
+    document.getElementById('workout-active').classList.remove('hidden');
+  },
+
+  showWorkoutHome() {
+    document.getElementById('workout-active').classList.add('hidden');
+    document.getElementById('workout-free').classList.remove('hidden');
+    this.renderHome();
   },
 
   removeExoFromWorkout(i) { this.currentWorkout.splice(i, 1); this.renderWorkout(); },
@@ -638,8 +752,10 @@ const app = {
     this.guidedExoIndex = 0;
     this.guidedSetIndex = 0;
     this.restPauseCount = 0;
-    document.getElementById('workout-free').classList.remove('hidden');
     document.getElementById('workout-guided').classList.add('hidden');
+    document.getElementById('workout-active').classList.add('hidden');
+    document.getElementById('workout-free').classList.remove('hidden');
+    this.renderHome();
     this.renderWorkout();
     this.renderHistory();
     this.renderExercises();
@@ -654,29 +770,39 @@ const app = {
     const feelLabels = { easy: '😎 Facile', correct: '👍 OK', hard: '😤 Dur', fail: '❌ Raté' };
     const delta = { easy: 2.5, correct: 0, hard: 0, fail: -2.5 };
 
+    const proposals = [];
     lastSession.exercises.forEach(we => {
       const setsWithFeeling = we.sets.filter(s => s.feeling && s.kg);
       if (!setsWithFeeling.length) return;
-
-      // Ressenti dominant
       const counts = {};
       setsWithFeeling.forEach(s => { counts[s.feeling] = (counts[s.feeling] || 0) + 1; });
       const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-      if (dominant === 'correct') return; // Pas de changement
-
+      if (dominant === 'correct') return;
       const lastKg = parseFloat(setsWithFeeling.at(-1).kg);
       const newKg = Math.max(0, lastKg + (delta[dominant] || 0));
       const exo = this.exercises.find(e => e.name === we.name);
       if (!exo) return;
       if (newKg === (exo.defaultKg || 0) && newKg === lastKg) return;
-
-      const msg = `${we.name}\n\nRessenti : ${feelLabels[dominant]}\nPoids utilisé : ${lastKg} kg\n\u27a1\ufe0f Poids suggéré : ${newKg} kg${exo.defaultKg ? `\nPoids actuel : ${exo.defaultKg} kg` : ''}\n\nMettre à jour ?`;
-
-      if (confirm(msg)) {
-        exo.defaultKg = newKg;
-        this.saveExercises();
-      }
+      proposals.push({ exo, name: we.name, dominant, lastKg, newKg, label: feelLabels[dominant] });
     });
+
+    const showNext = (i) => {
+      if (i >= proposals.length) return;
+      const p = proposals[i];
+      const arrow = p.newKg > p.lastKg ? '⬆️' : '⬇️';
+      this.showModal({
+        icon: arrow, title: `${p.name}`,
+        msg: `Ressenti : ${p.label}\n${p.lastKg} kg → ${p.newKg} kg`,
+        confirmText: 'Mettre à jour', cancelText: 'Garder',
+        onConfirm: () => {
+          p.exo.defaultKg = p.newKg;
+          this.saveExercises();
+          showNext(i + 1);
+        }
+      });
+      document.getElementById('modal-custom-cancel').onclick = () => { this.closeCustomModal(); showNext(i + 1); };
+    };
+    showNext(0);
   },
 
   // HISTORY
@@ -858,10 +984,12 @@ const app = {
   },
 
   resetAllData() {
-    if (!confirm('\u26a0\ufe0f Supprimer TOUTES les donn\u00e9es (exercices, historique, programmes) ?')) return;
-    if (!confirm('Vraiment tout supprimer ? Cette action est irr\u00e9versible.')) return;
-    localStorage.clear();
-    location.reload();
+    this.showModal({
+      icon: '⚠️', title: 'Tout supprimer ?',
+      msg: 'Exercices, historique, programmes… Cette action est irréversible.',
+      confirmText: 'Tout supprimer', confirmClass: 'modal-btn-danger',
+      onConfirm: () => { localStorage.clear(); location.reload(); }
+    });
   },
 
   updateStats() {
@@ -869,6 +997,94 @@ const app = {
     if (el('stats-exos')) el('stats-exos').textContent = this.exercises.length;
     if (el('stats-sessions')) el('stats-sessions').textContent = this.history.length;
     if (el('stats-programs')) el('stats-programs').textContent = this.customPrograms.length;
+  },
+
+  // SPOTIFY
+  spotifyPlaylists: [
+    { name: '💪 Beast Mode', uri: '37i9dQZF1DX76Wlfdnj7AP' },
+    { name: '🔥 Workout Twerkout', uri: '37i9dQZF1DX0HRj9P7NxeE' },
+    { name: '⚡ Power Workout', uri: '37i9dQZF1DX70RN3TfnE9m' },
+    { name: '🎸 Rock Workout', uri: '37i9dQZF1DX9qNs32fujYe' },
+    { name: '🎶 Motivation Mix', uri: '37i9dQZF1DXdxcBWuJkbcy' },
+    { name: '🎵 Rap Workout', uri: '37i9dQZF1DX0vMF3iBNMhs' },
+  ],
+
+  currentSpotifyUri: null,
+
+  isMobile() {
+    return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  },
+
+  renderSpotify() {
+    const saved = localStorage.getItem('spotifyUri');
+    if (saved && !this.currentSpotifyUri) {
+      this.currentSpotifyUri = saved;
+      if (!this.isMobile()) this.setSpotifyEmbed(saved);
+      else this.showSpotifyMini();
+    }
+
+    document.getElementById('spotify-preset-list').innerHTML = this.spotifyPlaylists.map(p =>
+      `<button class="spotify-preset" onclick="app.loadSpotify('${p.uri}')">${p.name}</button>`
+    ).join('');
+
+    const openBtn = document.getElementById('spotify-open-app');
+    if (this.currentSpotifyUri && this.isMobile()) openBtn.classList.remove('hidden');
+    else openBtn.classList.add('hidden');
+  },
+
+  loadSpotify(uri) {
+    this.currentSpotifyUri = uri;
+    localStorage.setItem('spotifyUri', uri);
+    if (this.isMobile()) {
+      this.showSpotifyMini();
+      document.getElementById('spotify-open-app').classList.remove('hidden');
+      this.openInSpotifyApp();
+    } else {
+      this.setSpotifyEmbed(uri);
+    }
+  },
+
+  loadSpotifyUrl() {
+    const url = document.getElementById('spotify-url').value.trim();
+    if (!url) return;
+    const match = url.match(/open\.spotify\.com\/(playlist|album|track)\/([a-zA-Z0-9]+)/);
+    if (!match) { this.showModal({ icon: '❌', title: 'Lien invalide', msg: 'Colle un lien Spotify valide (playlist, album ou titre).', confirmText: 'OK', onConfirm: () => {} }); return; }
+    this.loadSpotify(`${match[1]}/${match[2]}`);
+    document.getElementById('spotify-url').value = '';
+  },
+
+  openInSpotifyApp() {
+    if (!this.currentSpotifyUri) return;
+    const type = this.currentSpotifyUri.includes('/') ? this.currentSpotifyUri : `playlist/${this.currentSpotifyUri}`;
+    const [kind, id] = type.split('/');
+    window.open(`https://open.spotify.com/${kind}/${id}`, '_blank');
+  },
+
+  setSpotifyEmbed(uri) {
+    const type = uri.includes('/') ? uri : `playlist/${uri}`;
+    document.getElementById('spotify-mini-embed').innerHTML =
+      `<iframe src="https://open.spotify.com/embed/${type}?theme=0" width="100%" height="80" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`;
+    this.showSpotifyMini();
+  },
+
+  showSpotifyMini() {
+    const mini = document.getElementById('spotify-mini');
+    mini.classList.remove('hidden');
+    const openBtn = document.getElementById('spotify-mini-open');
+    if (this.isMobile()) {
+      document.getElementById('spotify-mini-embed').innerHTML = '';
+      openBtn.classList.remove('hidden');
+    } else {
+      openBtn.classList.add('hidden');
+    }
+  },
+
+  closeSpotifyMini() {
+    document.getElementById('spotify-mini').classList.add('hidden');
+    document.getElementById('spotify-mini-embed').innerHTML = '';
+    document.getElementById('spotify-mini-open').classList.add('hidden');
+    this.currentSpotifyUri = null;
+    localStorage.removeItem('spotifyUri');
   },
 
   showTechniqueDetail(techId) {
