@@ -25,6 +25,11 @@ const timer = {
       src.connect(ctx.destination);
       src.start(0);
       ctx.resume().catch(() => {});
+      // Débloquer aussi les objets Audio sur iOS/Safari
+      Object.values(this.sounds).forEach(s => {
+        s.muted = true;
+        s.play().then(() => { s.pause(); s.muted = false; s.currentTime = 0; }).catch(() => { s.muted = false; });
+      });
       document.removeEventListener('touchstart', unlock);
       document.removeEventListener('click', unlock);
     };
