@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
   <!-- MINI PLAYER SPOTIFY -->
   <div id="spotify-mini" class="hidden">
     <div id="spotify-mini-embed"></div>
@@ -84,6 +85,7 @@
         <div id="guided-timer-popup">
           <div id="guided-timer-label">Repos</div>
           <div id="guided-timer-display">01:30</div>
+          <div id="guided-timer-extra"></div>
           <button id="guided-timer-skip" onclick="app.skipTimer()">Passer ▶</button>
           <button id="guided-timer-pause" onclick="app.pauseTimer()">⏸️ Pause</button>
         </div>
@@ -209,6 +211,21 @@
         <span id="modal-custom-unit"></span>
       </div>
       <div id="modal-custom-buttons"></div>
+    </div>
+  </div>
+
+  <!-- MODAL RPE -->
+  <div id="modal-rpe" class="modal hidden">
+    <div class="modal-content modal-rpe-content">
+      <h2>💪 RPE — Effort ressenti</h2>
+      <p class="rpe-explanation">Combien de reps pouviez-vous encore faire ?</p>
+      <div class="rpe-grid">
+        <button class="rpe-btn rpe-6" onclick="app.guidedSetFeeling('6')"><span class="rpe-num">6</span><span class="rpe-label">4+ reps en réserve</span></button>
+        <button class="rpe-btn rpe-7" onclick="app.guidedSetFeeling('7')"><span class="rpe-num">7</span><span class="rpe-label">3 reps en réserve</span></button>
+        <button class="rpe-btn rpe-8" onclick="app.guidedSetFeeling('8')"><span class="rpe-num">8</span><span class="rpe-label">2 reps en réserve</span></button>
+        <button class="rpe-btn rpe-9" onclick="app.guidedSetFeeling('9')"><span class="rpe-num">9</span><span class="rpe-label">1 rep en réserve</span></button>
+        <button class="rpe-btn rpe-10" onclick="app.guidedSetFeeling('10')"><span class="rpe-num">10</span><span class="rpe-label">Échec musculaire</span></button>
+      </div>
     </div>
   </div>
 

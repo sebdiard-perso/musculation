@@ -499,7 +499,8 @@ const app = {
     // Série en cours
     const rpLabel = isRestPause && this.restPauseCount > 0 ? ` (rest-pause ${this.restPauseCount}/3)` : '';
     const techBadge = tech
-      ? `<div class="technique-badge" style="border-color:${tech.color};color:${tech.color};margin-bottom:12px">${tech.emoji} ${tech.label}<span class="tech-desc">${tech.desc}</span></div>`
+      ? `<div class="technique-badge" style="border-color:${tech.color};color:${tech.color};margin-bottom:12px">${tech.emoji} ${tech.label}<span class="tech-desc">${tech.desc}</span></div>
+         ${tech.detail ? `<div class="tech-detail"><div class="tech-detail-exec">${tech.detail.execution.replace(/\n/g, '<br>')}</div><div class="tech-detail-conseil">💡 ${tech.detail.conseil}</div></div>` : ''}`
       : '';
 
     document.getElementById('guided-current-set').innerHTML = `
@@ -518,12 +519,7 @@ const app = {
             onchange="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].reps=this.value">
         </div>
       </div>
-      <div class="guided-feeling">
-        <button class="${set.feeling==='easy'?'active easy':''}" onclick="app.guidedSetFeeling('easy')">😎 Facile</button>
-        <button class="${set.feeling==='correct'?'active correct':''}" onclick="app.guidedSetFeeling('correct')">👍 OK</button>
-        <button class="${set.feeling==='hard'?'active hard':''}" onclick="app.guidedSetFeeling('hard')">😤 Dur</button>
-        <button class="${set.feeling==='fail'?'active fail':''}" onclick="app.guidedSetFeeling('fail')">❌ Raté</button>
-      </div>
+
     `;
 
     // Bouton suivant
@@ -537,14 +533,25 @@ const app = {
     document.getElementById('guided-next').textContent = btnText;
   },
 
-  guidedSetFeeling(feeling) {
+  guidedSetFeeling(rpe) {
     const set = this.currentWorkout[this.guidedExoIndex].sets[this.guidedSetIndex];
-    set.feeling = feeling;
-    this.renderGuided();
+    set.feeling = rpe;
+    this.closeRpeModal();
+    this._afterRpe();
   },
 
-  showTimerPopup(label) {
+  showRpeModal(afterCb) {
+    this._afterRpe = afterCb;
+    document.getElementById('modal-rpe').classList.remove('hidden');
+  },
+
+  closeRpeModal() {
+    document.getElementById('modal-rpe').classList.add('hidden');
+  },
+
+  showTimerPopup(label, extraHtml) {
     document.getElementById('guided-timer-label').textContent = label || 'Repos';
+    document.getElementById('guided-timer-extra').innerHTML = extraHtml || '';
     document.getElementById('guided-timer-pause').textContent = '⏸️ Pause';
     document.getElementById('guided-timer').classList.remove('hidden');
   },
@@ -613,6 +620,21 @@ const app = {
       return;
     }
 
+    // Demander le RPE avant de continuer
+    if (!set.feeling) {
+      this.showRpeModal(() => this._continueAfterRpe());
+      return;
+    }
+    this._continueAfterRpe();
+  },
+
+  _continueAfterRpe() {
+    const exo = this.currentWorkout[this.guidedExoIndex];
+    const set = exo.sets[this.guidedSetIndex];
+    const isRestPause = set.technique === 'rest-pause';
+    const isLastSet = this.guidedSetIndex === exo.sets.length - 1;
+    const isLastExo = this.guidedExoIndex === this.currentWorkout.length - 1;
+
     this.restPauseCount = 0;
 
     if (isLastSet && isLastExo) {
@@ -621,16 +643,19 @@ const app = {
     }
 
     if (isLastSet) {
-      // Charger l'exercice suivant d'abord, puis popup timer 3 min
       this.guidedExoIndex++;
       this.guidedSetIndex = 0;
       this.renderGuided();
       window.scrollTo(0, 0);
-      this.showTimerPopup('Repos entre exercices');
+      const nextExo = this.currentWorkout[this.guidedExoIndex];
+      const desc = DATA.descriptions[nextExo.name];
+      const descHtml = desc
+        ? `<div class="next-exo-preview"><div class="next-exo-title">Prochain : ${nextExo.name}</div><div class="next-exo-muscles">${desc.muscles}</div><div class="next-exo-exec">${desc.exec}</div></div>`
+        : `<div class="next-exo-preview"><div class="next-exo-title">Prochain : ${nextExo.name}</div></div>`;
+      this.showTimerPopup('Repos entre exercices', descHtml);
       timer.onEnd = () => this.hideTimerPopup();
       timer.autoStart(this.restBetweenExos);
     } else {
-      // Popup timer repos puis série suivante
       this.showTimerPopup('Repos');
       timer.onEnd = () => {
         this.hideTimerPopup();
@@ -767,7 +792,7 @@ const app = {
   proposeWeightAdjustments() {
     const lastSession = this.history[0];
     if (!lastSession) return;
-    const feelLabels = { easy: '😎 Facile', correct: '👍 OK', hard: '😤 Dur', fail: '❌ Raté' };
+    const feelLabels = { '6': 'RPE 6', '7': 'RPE 7', '8': 'RPE 8', '9': 'RPE 9', '10': 'RPE 10', easy: '😎 Facile', correct: '👍 OK', hard: '😤 Dur', fail: '❌ Raté' };
     const delta = { easy: 2.5, correct: 0, hard: 0, fail: -2.5 };
 
     const proposals = [];
@@ -825,7 +850,7 @@ const app = {
   showDetail(id) {
     const s = this.history.find(h => h.id === id);
     if (!s) return;
-    const fe = { easy: '😎', correct: '👍', hard: '😤', fail: '❌' };
+    const fe = { '6': '6', '7': '7', '8': '8', '9': '9', '10': '10', easy: '😎', correct: '👍', hard: '😤', fail: '❌' };
     document.getElementById('detail-content').innerHTML = s.exercises.map(e =>
       `<div class="detail-exo"><h3>${e.name} (${e.muscle})</h3>
         ${e.sets.map((s, i) => `<div class="detail-set">Série ${i+1} : ${s.kg||'—'} kg × ${s.reps||'—'} reps

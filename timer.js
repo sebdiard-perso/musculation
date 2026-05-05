@@ -3,51 +3,67 @@ const timer = {
   remaining: 90,
   interval: null,
   wakeLock: null,
-  sounds: {},
+  beepEl: null,
+  buzzerEl: null,
   onEnd: null,
 
   init() {
-    // Charger les MP3
-    this.sounds.beep = new Audio('freesound_community-short-beep-tone-47916.mp3');
-    this.sounds.buzzer = new Audio('magiaz-bip-457700.mp3');
-    this.sounds.beep.load();
-    this.sounds.buzzer.load();
-    this.unlockAudio();
-    this.updateDisplay();
-  },
-
-  unlockAudio() {
+    this.beepEl = new Audio('freesound_community-short-beep-tone-47916.mp3');
+    this.buzzerEl = new Audio('magiaz-bip-457700.mp3');
+    this.beepEl.preload = 'auto';
+    this.buzzerEl.preload = 'auto';
     const unlock = () => {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const buf = ctx.createBuffer(1, 1, 22050);
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.connect(ctx.destination);
-      src.start(0);
-      ctx.resume().catch(() => {});
-      // Débloquer aussi les objets Audio sur iOS/Safari
-      Object.values(this.sounds).forEach(s => {
-        s.muted = true;
-        s.play().then(() => { s.pause(); s.muted = false; s.currentTime = 0; }).catch(() => { s.muted = false; });
-      });
+      this.beepEl.play().then(() => { this.beepEl.pause(); this.beepEl.currentTime = 0; }).catch(() => {});
+      this.buzzerEl.play().then(() => { this.buzzerEl.pause(); this.buzzerEl.currentTime = 0; }).catch(() => {});
       document.removeEventListener('touchstart', unlock);
       document.removeEventListener('click', unlock);
     };
     document.addEventListener('touchstart', unlock);
     document.addEventListener('click', unlock);
+    this.updateDisplay();
   },
 
   playBeep() {
-    const s = this.sounds.beep;
-    if (s) { s.currentTime = 0; s.play().catch(() => {}); }
+    try {
+      this.beepEl.currentTime = 0;
+      this.beepEl.play().catch(() => {});
+    } catch (e) {}
+    if (navigator.vibrate) navigator.vibrate(100);
   },
 
   playBuzzer() {
-    const s = this.sounds.buzzer;
-    if (s) { s.currentTime = 0; s.play().catch(() => {}); }
+    try {
+      this.buzzerEl.currentTime = 0;
+      this.buzzerEl.play().catch(() => {});
+    } catch (e) {}
+    if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 500]);
   },
 
   set(secs) { this.stop(); this.seconds = secs; this.remaining = secs; this.updateDisplay(); },
+
+  _tick() {
+    const elapsed = Math.floor((Date.now() - this._startTime) / 1000);
+    const prev = this.remaining;
+    this.remaining = Math.max(0, this._startRemaining - elapsed);
+    if (this.remaining !== prev) {
+      this.updateDisplay();
+      if (this.remaining >= 1 && this.remaining <= 5 && prev > this.remaining) this.playBeep();
+      if (this.remaining <= 0) {
+        this.stop();
+        this.setTimerClass('done');
+        this.updateBtn('▶️ Start');
+        this.playBuzzer();
+        this.releaseWake();
+        if (this.onEnd) { const cb = this.onEnd; this.onEnd = null; setTimeout(cb, 500); }
+      }
+    }
+  },
+
+  _run() {
+    this._startTime = Date.now();
+    this._startRemaining = this.remaining;
+    this.interval = setInterval(() => this._tick(), 250);
+  },
 
   start() {
     if (this.interval) { this.stop(); this.updateBtn('▶️ Start'); this.releaseWake(); return; }
@@ -55,22 +71,7 @@ const timer = {
     this.requestWake();
     this.setTimerClass('running');
     this.updateBtn('⏸️ Pause');
-    this.interval = setInterval(() => {
-      this.remaining--;
-      this.updateDisplay();
-      if (this.remaining === 3) this.playBeep();
-      if (this.remaining === 2) this.playBeep();
-      if (this.remaining === 1) this.playBeep();
-      if (this.remaining <= 0) {
-        this.stop();
-        this.setTimerClass('done');
-        this.updateBtn('▶️ Start');
-        this.playBuzzer();
-        if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 500]);
-        this.releaseWake();
-        if (this.onEnd) { const cb = this.onEnd; this.onEnd = null; setTimeout(cb, 500); }
-      }
-    }, 1000);
+    this._run();
   },
 
   stop() { clearInterval(this.interval); this.interval = null; },
@@ -88,22 +89,7 @@ const timer = {
     if (this.remaining <= 0) return;
     this.requestWake();
     this.setTimerClass('running');
-    this.interval = setInterval(() => {
-      this.remaining--;
-      this.updateDisplay();
-      if (this.remaining === 3) this.playBeep();
-      if (this.remaining === 2) this.playBeep();
-      if (this.remaining === 1) this.playBeep();
-      if (this.remaining <= 0) {
-        this.stop();
-        this.setTimerClass('done');
-        this.updateBtn('▶️ Start');
-        this.playBuzzer();
-        if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 500]);
-        this.releaseWake();
-        if (this.onEnd) { const cb = this.onEnd; this.onEnd = null; setTimeout(cb, 500); }
-      }
-    }, 1000);
+    this._run();
   },
 
   setTimerClass(cls) {

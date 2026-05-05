@@ -451,3 +451,41 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
 }
 .spotify-open-btn:active { opacity: 0.8; }
 #spotify-open-app { padding: 0 16px; }
+
+/* RPE Modal */
+.modal-rpe-content { text-align: center; padding: 24px 16px; }
+.modal-rpe-content h2 { margin-bottom: 4px; }
+.rpe-explanation { color: var(--muted); font-size: 0.85rem; margin-bottom: 16px; }
+.rpe-grid { display: flex; flex-direction: column; gap: 8px; }
+.rpe-btn {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border-radius: var(--radius); border: none;
+  font-size: 1rem; cursor: pointer; transition: transform 0.1s;
+  background: var(--card); color: var(--text);
+}
+.rpe-btn:active { transform: scale(0.97); }
+.rpe-num { font-size: 1.4rem; font-weight: 800; min-width: 36px; }
+.rpe-label { font-size: 0.9rem; color: var(--muted); }
+.rpe-6 .rpe-num { color: #4caf50; }
+.rpe-7 .rpe-num { color: #8bc34a; }
+.rpe-8 .rpe-num { color: #ff9800; }
+.rpe-9 .rpe-num { color: #f44336; }
+.rpe-10 .rpe-num { color: #9c27b0; }
+
+/* Next exercise preview in timer popup */
+.next-exo-preview {
+  margin-top: 16px; padding: 12px; border-radius: var(--radius);
+  background: rgba(255,255,255,0.05); text-align: left;
+}
+.next-exo-title { font-weight: 700; font-size: 1rem; margin-bottom: 6px; }
+.next-exo-muscles { font-size: 0.8rem; color: var(--accent); margin-bottom: 8px; }
+.next-exo-exec { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
+#guided-timer-extra { max-height: 40vh; overflow-y: auto; }
+
+/* Technique detail in guided mode */
+.tech-detail {
+  background: rgba(255,255,255,0.05); border-radius: var(--radius);
+  padding: 10px 12px; margin-bottom: 12px; text-align: left; font-size: 0.82rem; line-height: 1.5;
+}
+.tech-detail-exec { color: var(--text); margin-bottom: 8px; }
+.tech-detail-conseil { color: var(--accent); font-style: italic; }
