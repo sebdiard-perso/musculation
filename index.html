@@ -112,6 +112,7 @@
       <button class="more-item" onclick="app.goTo('calendar')">📆 Calendrier</button>
       <button class="more-item" onclick="app.goTo('exercises')">📋 Mes exercices</button>
       <button class="more-item" onclick="app.goTo('history')">📊 Historique</button>
+      <button class="more-item" onclick="app.goTo('guide')">📖 Guide Musculation</button>
       <button class="more-item" onclick="app.goTo('settings')">📦 Sauvegarde & Import</button>
       <button class="more-item" onclick="app.goTo('spotify')">🎵 Musique</button>
     </div>
@@ -154,6 +155,96 @@
   <main id="view-history" class="view sub-view">
     <div class="sub-header"><button onclick="app.goTo('more')">◀ Retour</button><h1>Historique</h1></div>
     <div id="history-list"></div>
+  </main>
+
+  <!-- VUE GUIDE MUSCULATION -->
+  <main id="view-guide" class="view sub-view">
+    <div class="sub-header"><button onclick="app.goTo('more')">◀ Retour</button><h1>📖 Guide</h1></div>
+
+    <div class="guide-section">
+      <h2>💪 Croissance musculaire (Hypertrophie)</h2>
+      <div class="guide-card">
+        <h3>Les 3 mécanismes</h3>
+        <p><strong>1. Tension mécanique</strong> — Le facteur principal. Plus le muscle travaille contre une charge lourde sur une amplitude complète, plus il grossit. Visé par les séries lourdes (RPE 8-9).</p>
+        <p><strong>2. Stress métabolique</strong> — La « brûlure ». Séries longues avec peu de repos. Accumulation de lactate et gonflement cellulaire. Visé par les séries volume (15-20 reps).</p>
+        <p><strong>3. Dommages musculaires</strong> — Micro-lésions des fibres, surtout en phase excentrique (descente lente). Le muscle se répare plus fort. Visé par les techniques negative et tempo.</p>
+      </div>
+      <div class="guide-card">
+        <h3>Variables optimales</h3>
+        <p><strong>Volume :</strong> 10-20 séries par muscle par semaine</p>
+        <p><strong>Intensité :</strong> 60-80% du max (RPE 7-9)</p>
+        <p><strong>Fréquence :</strong> 2x par muscle par semaine</p>
+        <p><strong>Repos :</strong> 90s-3min (composés), 60-90s (isolation)</p>
+        <p><strong>Progression :</strong> +1 rep ou +1-2kg quand RPE ≤ 7</p>
+      </div>
+    </div>
+
+    <div class="guide-section">
+      <h2>🍽 Nutrition & Apports</h2>
+      <div class="guide-card">
+        <h3>Protéines</h3>
+        <p><strong>1.6 à 2.2g par kg de poids de corps par jour</strong></p>
+        <p>Répartir sur 3-5 repas (30-40g par prise). Sources : poulet, œufs, poisson, whey, légumineuses, fromage blanc.</p>
+        <p><em>Exemple 75kg : 120 à 165g de protéines/jour</em></p>
+      </div>
+      <div class="guide-card">
+        <h3>Calories</h3>
+        <p><strong>Prise de masse :</strong> +200 à 300 kcal au-dessus de ta maintenance</p>
+        <p><strong>Sèche :</strong> -300 à 500 kcal en dessous (garder les protéines hautes)</p>
+        <p><strong>Recomposition :</strong> manger à la maintenance avec beaucoup de protéines</p>
+      </div>
+      <div class="guide-card">
+        <h3>Timing</h3>
+        <p><strong>Avant l’entraînement :</strong> repas 1h30-2h avant (glucides + protéines)</p>
+        <p><strong>Après l’entraînement :</strong> protéines dans les 2h (pas urgent, mais idéal)</p>
+        <p><strong>Créatine :</strong> 3-5g/jour tous les jours (le supplément le plus prouvé scientifiquement)</p>
+      </div>
+    </div>
+
+    <div class="guide-section">
+      <h2>📊 RPE (Rate of Perceived Exertion)</h2>
+      <div class="guide-card">
+        <h3>L’échelle RPE</h3>
+        <p>Le RPE mesure combien de répétitions tu aurais pu encore faire :</p>
+        <table class="guide-table">
+          <tr><td class="rpe-6">RPE 6</td><td>4+ reps en réserve — Échauffement</td></tr>
+          <tr><td class="rpe-7">RPE 7</td><td>3 reps en réserve — Léger, bon pour le volume</td></tr>
+          <tr><td class="rpe-8">RPE 8</td><td>2 reps en réserve — Zone idéale hypertrophie</td></tr>
+          <tr><td class="rpe-9">RPE 9</td><td>1 rep en réserve — Dur, dernières séries</td></tr>
+          <tr><td class="rpe-10">RPE 10</td><td>Échec musculaire — À utiliser rarement</td></tr>
+        </table>
+      </div>
+      <div class="guide-card">
+        <h3>Comment l’utiliser</h3>
+        <p><strong>Semaines 1-2 :</strong> Travaille à RPE 7-8. Tu apprends les mouvements et tu montes en charge.</p>
+        <p><strong>Semaine 3 :</strong> Pousse à RPE 8-9. Intensité maximale.</p>
+        <p><strong>Semaine 4 (Deload) :</strong> RPE 6-7, baisse le poids de 20%. Récupération.</p>
+        <p><strong>Règle de progression :</strong> Si tu finis une série à RPE ≤ 7 alors que tu visais 8 → augmente le poids la semaine suivante (+1-2kg).</p>
+      </div>
+    </div>
+
+    <div class="guide-section">
+      <h2>😴 Récupération</h2>
+      <div class="guide-card">
+        <p><strong>Sommeil :</strong> 7-9h par nuit. L’hormone de croissance est libérée pendant le sommeil profond.</p>
+        <p><strong>Repos entre séances :</strong> 48h minimum entre deux séances du même muscle (respecté avec Upper/Lower).</p>
+        <p><strong>Deload :</strong> Toutes les 3-4 semaines, réduis le volume/intensité. Le muscle grossit pendant la récupération, pas pendant l’entraînement.</p>
+        <p><strong>Signes de sur-entraînement :</strong> fatigue persistante, baisse de performance, douleurs articulaires, mauvais sommeil → prends un deload.</p>
+      </div>
+    </div>
+
+    <div class="guide-section">
+      <h2>🎯 Techniques d’intensification</h2>
+      <div class="guide-card">
+        <p><strong>Negative (excentrique) :</strong> Descente lente 4-5s. Crée plus de dommages musculaires. Idéal sur les composés.</p>
+        <p><strong>Tempo (4-1-2-1) :</strong> Contrôle chaque phase. Augmente le temps sous tension. Idéal pour les jambes.</p>
+        <p><strong>Rest-Pause :</strong> Série à l’échec, 15s repos, repartir. Accumule du volume sur un même poids.</p>
+        <p><strong>Drop Set :</strong> Série à l’échec, baisser le poids de 20-30%, repartir. Stress métabolique maximal.</p>
+        <p><strong>Peak Contraction :</strong> Maintenir 2-3s en haut du mouvement. Recrute plus de fibres.</p>
+        <p><strong>Iso-Hold :</strong> Tenir la position la plus dure 10-15s après la dernière rep.</p>
+        <p><em>→ Appliquer uniquement sur la dernière série pour éviter le sur-entraînement.</em></p>
+      </div>
+    </div>
   </main>
 
   <!-- VUE RÉGLAGES -->

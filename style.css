@@ -489,3 +489,24 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
 }
 .tech-detail-exec { color: var(--text); margin-bottom: 8px; }
 .tech-detail-conseil { color: var(--accent); font-style: italic; }
+
+/* Guide Musculation */
+.guide-section { margin-bottom: 24px; }
+.guide-section h2 { font-size: 1.1rem; margin-bottom: 12px; }
+.guide-card {
+  background: var(--card); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 10px;
+}
+.guide-card h3 { font-size: 0.95rem; margin-bottom: 8px; color: var(--accent); }
+.guide-card p { font-size: 0.85rem; line-height: 1.5; margin-bottom: 8px; color: var(--text); }
+.guide-card p:last-child { margin-bottom: 0; }
+.guide-card em { color: var(--muted); }
+.guide-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.guide-table tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
+.guide-table td { padding: 8px 6px; }
+.guide-table td:first-child { font-weight: 700; min-width: 60px; }
+.guide-table .rpe-6 { color: #4caf50; }
+.guide-table .rpe-7 { color: #8bc34a; }
+.guide-table .rpe-8 { color: #ff9800; }
+.guide-table .rpe-9 { color: #f44336; }
+.guide-table .rpe-10 { color: #9c27b0; }
