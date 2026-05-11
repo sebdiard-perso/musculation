@@ -192,4 +192,16 @@ const DATA = {
       ]
     }
   ],
+
+  // Paliers de progression par groupe musculaire
+  weightIncrements: {
+    'Pectoraux': 2.5,   // gros composés
+    'Dos': 2.5,         // gros composés
+    'Jambes': 2.5,      // gros composés
+    'Épaules': 2,       // composés moyens
+    'Biceps': 1,        // isolation
+    'Triceps': 1,       // isolation
+    'Mollets': 1,       // isolation
+    'Abdos': 0,         // pas de poids généralement
+  },
 };

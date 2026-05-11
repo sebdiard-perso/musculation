@@ -171,7 +171,15 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
 #calendar-detail { padding: 0 16px; }
 .cal-detail-item { background: var(--surface); padding: 12px; border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
 .cal-detail-item .date { font-weight: 600; margin-bottom: 4px; }
-.cal-detail-item .summary { font-size: 0.85rem; color: var(--muted); }
+.cal-volume { font-size: 0.85rem; color: var(--warning); font-weight: 600; margin-bottom: 8px; }
+.cal-exo-list { display: flex; flex-direction: column; gap: 4px; }
+.cal-exo-detail { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.cal-exo-detail:last-child { border-bottom: none; }
+.cal-exo-name { color: var(--text); }
+.cal-exo-stats { color: var(--muted); }
+.prog-up { color: var(--success); font-weight: 600; margin-left: 4px; }
+.prog-down { color: var(--accent); font-weight: 600; margin-left: 4px; }
+.prog-same { color: var(--muted); margin-left: 4px; }
 
 /* EXERCISE LIST */
 #exercise-list { padding: 0 16px; }
@@ -478,6 +486,7 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
   background: rgba(255,255,255,0.05); text-align: left;
 }
 .next-exo-title { font-weight: 700; font-size: 1rem; margin-bottom: 6px; }
+.next-exo-kg { font-size: 1.3rem; font-weight: 800; color: var(--warning); margin-bottom: 8px; }
 .next-exo-muscles { font-size: 0.8rem; color: var(--accent); margin-bottom: 8px; }
 .next-exo-exec { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
 #guided-timer-extra { max-height: 40vh; overflow-y: auto; }

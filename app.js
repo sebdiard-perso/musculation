@@ -169,10 +169,9 @@ const app = {
       return null;
     }
     const kg = parseFloat(last.kg);
-    const f = last.feeling || 'correct';
-    const delta = { easy: 2.5, correct: 0, hard: 0, fail: -2.5 };
-    const label = { easy: '😎 Facile → +2.5kg', correct: '👍 OK → même poids', hard: '😤 Dur → même poids', fail: '❌ Échec → −2.5kg' };
-    return { kg: Math.max(0, kg + (delta[f] || 0)), reason: label[f] || '', lastKg: kg };
+    // Utiliser le poids par défaut (mis à jour par proposeWeightAdjustments) s'il existe
+    if (defaultKg) return { kg: defaultKg, reason: `📊 Dernière séance : ${kg} kg`, lastKg: kg };
+    return { kg, reason: '📊 Dernière séance', lastKg: kg };
   },
 
   // EXERCISES
@@ -447,11 +446,13 @@ const app = {
       const exo = this.exercises.find(e => e.name === pe.name);
       const sug = this.getSuggestedWeight(pe.name);
       const kg = pe.kg || (sug ? sug.kg : (exo?.defaultKg || ''));
-      const reps = pe.reps.includes('-') ? pe.reps.split('-')[0] : pe.reps.replace(/\/jambe/, '');
+      const defaultReps = pe.reps.includes('-') ? pe.reps.split('-')[1] : pe.reps.replace(/\/jambe/, '');
       const sets = [];
       for (let i = 0; i < pe.sets; i++) {
         const isLast = i === pe.sets - 1;
-        sets.push({ kg, reps: (isLast && pe.lastSetTechnique === '21') ? '21' : reps, feeling: '',
+        // Utiliser les reps de la dernière séance si disponibles
+        const savedReps = exo?.lastReps?.[i] || defaultReps;
+        sets.push({ kg, reps: (isLast && pe.lastSetTechnique === '21') ? '21' : savedReps, feeling: '',
           technique: (isLast && pe.lastSetTechnique) ? pe.lastSetTechnique : '' });
       }
       return { exerciseId: exo ? exo.id : 0, name: pe.name, muscle: exo ? exo.muscle : '',
@@ -648,10 +649,12 @@ const app = {
       this.renderGuided();
       window.scrollTo(0, 0);
       const nextExo = this.currentWorkout[this.guidedExoIndex];
+      const nextKg = nextExo.sets[0]?.kg || '';
       const desc = DATA.descriptions[nextExo.name];
+      const kgHtml = nextKg ? `<div class="next-exo-kg">⚖️ ${nextKg} kg</div>` : '';
       const descHtml = desc
-        ? `<div class="next-exo-preview"><div class="next-exo-title">Prochain : ${nextExo.name}</div><div class="next-exo-muscles">${desc.muscles}</div><div class="next-exo-exec">${desc.exec}</div></div>`
-        : `<div class="next-exo-preview"><div class="next-exo-title">Prochain : ${nextExo.name}</div></div>`;
+        ? `<div class="next-exo-preview"><div class="next-exo-title">Prochain : ${nextExo.name}</div>${kgHtml}<div class="next-exo-muscles">${desc.muscles}</div></div>`
+        : `<div class="next-exo-preview"><div class="next-exo-title">Prochain : ${nextExo.name}</div>${kgHtml}</div>`;
       this.showTimerPopup('Repos entre exercices', descHtml);
       timer.onEnd = () => this.hideTimerPopup();
       timer.autoStart(this.restBetweenExos);
@@ -770,6 +773,18 @@ const app = {
     this.history.unshift({ id: Date.now(), date: new Date().toISOString(), exercises: JSON.parse(JSON.stringify(this.currentWorkout)) });
     this.saveHistory();
 
+    // Sauvegarder les reps et poids réalisés sur chaque exercice
+    this.currentWorkout.forEach(we => {
+      const exo = this.exercises.find(e => e.name === we.name);
+      if (!exo) return;
+      const repsArr = we.sets.map(s => s.reps || '').filter(r => r);
+      if (repsArr.length) exo.lastReps = repsArr;
+      // Mettre à jour le poids par défaut avec le dernier poids utilisé
+      const lastKg = we.sets.filter(s => s.kg).map(s => parseFloat(s.kg)).pop();
+      if (lastKg && !exo.defaultKg) exo.defaultKg = lastKg;
+    });
+    this.saveExercises();
+
     this.proposeWeightAdjustments();
 
     this.currentWorkout = [];
@@ -792,33 +807,69 @@ const app = {
   proposeWeightAdjustments() {
     const lastSession = this.history[0];
     if (!lastSession) return;
-    const feelLabels = { '6': 'RPE 6', '7': 'RPE 7', '8': 'RPE 8', '9': 'RPE 9', '10': 'RPE 10', easy: '😎 Facile', correct: '👍 OK', hard: '😤 Dur', fail: '❌ Raté' };
-    const delta = { easy: 2.5, correct: 0, hard: 0, fail: -2.5 };
 
     const proposals = [];
     lastSession.exercises.forEach(we => {
-      const setsWithFeeling = we.sets.filter(s => s.feeling && s.kg);
-      if (!setsWithFeeling.length) return;
-      const counts = {};
-      setsWithFeeling.forEach(s => { counts[s.feeling] = (counts[s.feeling] || 0) + 1; });
-      const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-      if (dominant === 'correct') return;
-      const lastKg = parseFloat(setsWithFeeling.at(-1).kg);
-      const newKg = Math.max(0, lastKg + (delta[dominant] || 0));
+      const setsWithData = we.sets.filter(s => s.feeling && s.kg && s.reps);
+      if (!setsWithData.length) return;
+
       const exo = this.exercises.find(e => e.name === we.name);
       if (!exo) return;
-      if (newKg === (exo.defaultKg || 0) && newKg === lastKg) return;
-      proposals.push({ exo, name: we.name, dominant, lastKg, newKg, label: feelLabels[dominant] });
+
+      // Palier selon le groupe musculaire
+      const increment = DATA.weightIncrements[exo.muscle] || 1;
+      if (increment === 0) return; // Abdos, pas de proposition
+
+      // Analyser la dernière série (la plus représentative)
+      const lastSet = setsWithData.at(-1);
+      const rpe = parseInt(lastSet.feeling);
+      const repsRealized = parseInt(lastSet.reps);
+      const lastKg = parseFloat(lastSet.kg);
+
+      if (isNaN(rpe) || isNaN(repsRealized) || isNaN(lastKg)) return;
+
+      // Extraire le haut de la plage de reps
+      let maxReps = 10;
+      if (we.targetReps) {
+        const parts = we.targetReps.replace(/\/jambe/, '').split('-');
+        maxReps = parseInt(parts[parts.length - 1]) || 10;
+      }
+
+      // Décision
+      let decision = 'same'; // same, up, down
+      if (repsRealized >= maxReps && rpe <= 8) {
+        decision = 'up';
+      } else if (rpe >= 10 && repsRealized < maxReps - 2) {
+        decision = 'down';
+      }
+
+      if (decision === 'same') return;
+
+      const newKg = decision === 'up'
+        ? lastKg + increment
+        : Math.max(0, lastKg - increment);
+
+      if (newKg === lastKg) return;
+
+      proposals.push({
+        exo, name: we.name, lastKg, newKg, increment, decision,
+        rpe, repsRealized, maxReps, muscle: exo.muscle
+      });
     });
+
+    if (!proposals.length) return;
 
     const showNext = (i) => {
       if (i >= proposals.length) return;
       const p = proposals[i];
-      const arrow = p.newKg > p.lastKg ? '⬆️' : '⬇️';
+      const arrow = p.decision === 'up' ? '⬆️' : '⬇️';
+      const reason = p.decision === 'up'
+        ? `${p.repsRealized} reps (obj: ${p.maxReps}) à RPE ${p.rpe} → prêt à monter`
+        : `RPE 10 avec ${p.repsRealized} reps (obj: ${p.maxReps}) → trop lourd`;
       this.showModal({
-        icon: arrow, title: `${p.name}`,
-        msg: `Ressenti : ${p.label}\n${p.lastKg} kg → ${p.newKg} kg`,
-        confirmText: 'Mettre à jour', cancelText: 'Garder',
+        icon: arrow, title: p.name,
+        msg: `${p.muscle} — palier ${p.increment} kg\n${reason}\n\n${p.lastKg} kg → ${p.newKg} kg`,
+        confirmText: `Valider ${p.newKg} kg`, cancelText: `Garder ${p.lastKg} kg`,
         onConfirm: () => {
           p.exo.defaultKg = p.newKg;
           this.saveExercises();
