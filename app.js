@@ -62,6 +62,8 @@ const app = {
     this.exercises.forEach(e => {
       if (map[e.name]) { e.name = map[e.name]; updated = true; }
       if (!e.video && defaultVids[e.name]) { e.video = defaultVids[e.name]; updated = true; }
+      const defExo = DATA.defaultExercises.find(de => de.name === e.name);
+      if (defExo && defExo.mode && !e.mode) { e.mode = defExo.mode; updated = true; }
     });
     // Ajouter les exercices manquants des programmes
     const existingNames = new Set(this.exercises.map(e => e.name));
@@ -180,7 +182,8 @@ const app = {
     if (!name) return;
     const video = document.getElementById('new-exo-video').value.trim();
     const muscle = document.getElementById('new-exo-muscle').value;
-    this.exercises.push({ id: Date.now(), name, muscle, video: video || '' });
+    const mode = document.getElementById('new-exo-mode').value;
+    this.exercises.push({ id: Date.now(), name, muscle, video: video || '', mode });
     document.getElementById('new-exo-name').value = '';
     document.getElementById('new-exo-video').value = '';
     this.saveExercises();
@@ -190,16 +193,19 @@ const app = {
   deleteExercise(id) { this.exercises = this.exercises.filter(e => e.id !== id); this.saveExercises(); this.renderExercises(); },
 
   renderExercises() {
+    const modeLabels = { barbell: '🏋️', bilateral: '👐', unilateral: '☝️', alternated: '🔄' };
     document.getElementById('exercise-list').innerHTML = this.exercises.map(e => {
       const desc = DATA.descriptions[e.name];
       const preview = desc ? desc.exec.substring(0, 60) + '…' : '';
+      const modeIcon = modeLabels[e.mode] || '👐';
       return `<div class="exo-item">
         <div class="exo-info" onclick="app.showExoDesc('${e.name.replace(/'/g, "\\'")}')">
-          <div class="name">${e.name}</div>
+          <div class="name">${modeIcon} ${e.name}</div>
           <div class="muscle">${e.muscle}${e.defaultKg ? ` — <strong>${e.defaultKg} kg</strong>` : ''}</div>
           ${preview ? `<div class="exo-desc-preview">${preview}</div>` : ''}
         </div>
         <div class="exo-item-actions">
+          <button onclick="app.editMode(${e.id})" title="Mode">☝️</button>
           <button onclick="app.editDefaultKg(${e.id})" title="Poids par défaut">⚖️</button>
           <button onclick="app.searchVideo(${e.id})">🔍</button>
           ${e.video ? `<button onclick="app.playVideo('${e.video}')">▶️</button>` : ''}
@@ -208,6 +214,25 @@ const app = {
         </div>
       </div>`;
     }).join('');
+  },
+
+  editMode(id) {
+    const exo = this.exercises.find(e => e.id === id);
+    if (!exo) return;
+    const modes = { '1': 'barbell', '2': 'bilateral', '3': 'unilateral', '4': 'alternated' };
+    const choice = prompt(
+      `Mode pour "${exo.name}" :\n` +
+      `1 = 🏋️ Barre (poids total)\n` +
+      `2 = 👐 2 haltères (poids par main)\n` +
+      `3 = ☝️ Unilatéral (D puis G)\n` +
+      `4 = 🔄 Alterné (D+G = 1 série)`,
+      exo.mode === 'barbell' ? '1' : exo.mode === 'bilateral' ? '2' : exo.mode === 'unilateral' ? '3' : '4'
+    );
+    if (choice && modes[choice]) {
+      exo.mode = modes[choice];
+      this.saveExercises();
+      this.renderExercises();
+    }
   },
 
   editDefaultKg(id) {
@@ -419,6 +444,7 @@ const app = {
   guidedMode: false,
   guidedExoIndex: 0,
   guidedSetIndex: 0,
+  guidedSide: null, // null, 'right', 'left' pour unilatéral
   restTime: 90,
   restBetweenExos: 180,
   restPauseCount: 0,
@@ -463,6 +489,7 @@ const app = {
     this.guidedExoIndex = 0;
     this.guidedSetIndex = 0;
     this.restPauseCount = 0;
+    this.guidedSide = null;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelector('[data-view="workout"]').classList.add('active');
@@ -481,6 +508,11 @@ const app = {
     const totalSets = exo.sets.length;
     const tech = set.technique ? DATA.techniques[set.technique] : null;
     const isRestPause = set.technique === 'rest-pause';
+    const exoData = this.exercises.find(e => e.name === exo.name);
+    const mode = exoData?.mode || 'bilateral';
+    const isUni = mode === 'unilateral';
+    // Init side pour unilatéral
+    if (isUni && !this.guidedSide) this.guidedSide = 'right';
 
     // Progress dots (exercices)
     document.getElementById('guided-progress').innerHTML = this.currentWorkout.map((e, i) => {
@@ -506,18 +538,20 @@ const app = {
 
     document.getElementById('guided-current-set').innerHTML = `
       ${techBadge}
-      <div class="guided-set-label">Série ${this.guidedSetIndex + 1} / ${totalSets}${rpLabel}</div>
+      <div class="guided-set-label">Série ${this.guidedSetIndex + 1} / ${totalSets}${rpLabel}${isUni ? ` — <strong>${this.guidedSide === 'right' ? '💪 Droite' : '🤛 Gauche'}</strong>` : ''}${mode === 'alternated' ? ' <span style="color:var(--muted)">(D+G)</span>' : ''}</div>
       <div class="guided-set-sub">Exercice ${this.guidedExoIndex + 1} / ${totalExos}</div>
       <div class="guided-inputs">
         <div class="guided-input-group">
           <label>Poids</label>
           <input type="number" inputmode="decimal" value="${set.kg}" placeholder="0"
-            onchange="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].kg=this.value">
+            onchange="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].kg=this.value"
+            oninput="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].kg=this.value">
         </div>
         <div class="guided-input-group">
           <label>Reps</label>
           <input type="number" inputmode="numeric" value="${set.reps}" placeholder="0"
-            onchange="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].reps=this.value">
+            onchange="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].reps=this.value"
+            oninput="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].reps=this.value">
         </div>
       </div>
 
@@ -584,6 +618,7 @@ const app = {
         this.guidedExoIndex = 0;
         this.guidedSetIndex = 0;
         this.restPauseCount = 0;
+    this.guidedSide = null;
         document.getElementById('workout-guided').classList.add('hidden');
         document.getElementById('workout-free').classList.remove('hidden');
         timer.reset();
@@ -621,6 +656,15 @@ const app = {
       return;
     }
 
+    // Unilatéral : D → G sans repos, RPE demandé seulement après G
+    const exoData = this.exercises.find(e => e.name === exo.name);
+    const mode = exoData?.mode || 'bilateral';
+    if (mode === 'unilateral' && this.guidedSide === 'right') {
+      this.guidedSide = 'left';
+      this.renderGuided();
+      return;
+    }
+
     // Demander le RPE avant de continuer
     if (!set.feeling) {
       this.showRpeModal(() => this._continueAfterRpe());
@@ -631,12 +675,12 @@ const app = {
 
   _continueAfterRpe() {
     const exo = this.currentWorkout[this.guidedExoIndex];
-    const set = exo.sets[this.guidedSetIndex];
-    const isRestPause = set.technique === 'rest-pause';
     const isLastSet = this.guidedSetIndex === exo.sets.length - 1;
     const isLastExo = this.guidedExoIndex === this.currentWorkout.length - 1;
 
     this.restPauseCount = 0;
+    this.guidedSide = null;
+    this._uniDone = false;
 
     if (isLastSet && isLastExo) {
       this.finishWorkout();
@@ -646,6 +690,7 @@ const app = {
     if (isLastSet) {
       this.guidedExoIndex++;
       this.guidedSetIndex = 0;
+      this.guidedSide = null;
       this.renderGuided();
       window.scrollTo(0, 0);
       const nextExo = this.currentWorkout[this.guidedExoIndex];
@@ -663,6 +708,7 @@ const app = {
       timer.onEnd = () => {
         this.hideTimerPopup();
         this.guidedSetIndex++;
+        this.guidedSide = null;
         this.renderGuided();
         window.scrollTo(0, 0);
       };
@@ -792,6 +838,7 @@ const app = {
     this.guidedExoIndex = 0;
     this.guidedSetIndex = 0;
     this.restPauseCount = 0;
+    this.guidedSide = null;
     document.getElementById('workout-guided').classList.add('hidden');
     document.getElementById('workout-active').classList.add('hidden');
     document.getElementById('workout-free').classList.remove('hidden');
