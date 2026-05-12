@@ -820,11 +820,13 @@ const app = {
       const increment = DATA.weightIncrements[exo.muscle] || 1;
       if (increment === 0) return; // Abdos, pas de proposition
 
-      // Analyser la dernière série (la plus représentative)
-      const lastSet = setsWithData.at(-1);
-      const rpe = parseInt(lastSet.feeling);
-      const repsRealized = parseInt(lastSet.reps);
-      const lastKg = parseFloat(lastSet.kg);
+      // Ignorer les séries avec technique d'intensification pour la décision
+      const normalSets = setsWithData.filter(s => !s.technique);
+      // Si toutes les séries ont une technique, prendre la première (la plus fraîche)
+      const referenceSet = normalSets.length > 0 ? normalSets.at(-1) : setsWithData[0];
+      const rpe = parseInt(referenceSet.feeling);
+      const repsRealized = parseInt(referenceSet.reps);
+      const lastKg = parseFloat(referenceSet.kg);
 
       if (isNaN(rpe) || isNaN(repsRealized) || isNaN(lastKg)) return;
 

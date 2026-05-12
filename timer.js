@@ -47,12 +47,13 @@ const timer = {
     this.remaining = Math.max(0, this._startRemaining - elapsed);
     if (this.remaining !== prev) {
       this.updateDisplay();
-      if (this.remaining >= 1 && this.remaining <= 5 && prev > this.remaining) this.playBeep();
+      if (this.remaining >= 1 && this.remaining <= 5 && prev > this.remaining) { this.playBeep(); if (navigator.vibrate) navigator.vibrate(100); }
       if (this.remaining <= 0) {
         this.stop();
         this.setTimerClass('done');
         this.updateBtn('▶️ Start');
         this.playBuzzer();
+        if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 500]);
         this.releaseWake();
         if (this.onEnd) { const cb = this.onEnd; this.onEnd = null; setTimeout(cb, 500); }
       }
