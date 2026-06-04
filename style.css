@@ -519,3 +519,51 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
 .guide-table .rpe-8 { color: #ff9800; }
 .guide-table .rpe-9 { color: #f44336; }
 .guide-table .rpe-10 { color: #9c27b0; }
+
+/* ---------- Planificateur 6 mois ---------- */
+.program-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.program-tools button {
+  flex: 1; min-width: 140px; padding: 12px 14px; border: none; border-radius: var(--radius);
+  font-size: 0.95rem; font-weight: 600; cursor: pointer;
+}
+#btn-new-program { background: var(--card); color: var(--text); }
+#btn-plan-program { background: linear-gradient(135deg, #6a4cff, #e94560); color: #fff; }
+
+.program-card.program-plan { border: 1px solid rgba(106,76,255,0.4); }
+.plan-header {
+  background: rgba(106,76,255,0.10);
+  border-radius: var(--radius);
+  padding: 12px; margin: 10px 0 14px;
+}
+.plan-week-line { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.plan-week-info { flex: 1; text-align: center; }
+.plan-week-num { font-weight: 800; font-size: 1.05rem; color: var(--text); }
+.plan-week-phase { font-size: 0.8rem; color: var(--accent); margin-top: 2px; }
+.plan-nav {
+  background: var(--card); color: var(--text); border: none;
+  width: 38px; height: 38px; border-radius: 50%; font-size: 1rem; cursor: pointer;
+}
+.plan-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+.plan-progress-bar {
+  width: 100%; height: 6px; background: rgba(255,255,255,0.1);
+  border-radius: 3px; overflow: hidden;
+}
+.plan-progress-fill {
+  height: 100%; background: linear-gradient(90deg, #6a4cff, #e94560);
+  transition: width .3s ease;
+}
+.plan-meta { font-size: 0.72rem; color: var(--muted); margin-top: 6px; text-align: center; }
+.plan-meta a { color: var(--accent); }
+
+.planner-form { display: flex; flex-direction: column; gap: 6px; }
+.planner-intro { font-size: 0.88rem; color: var(--muted); margin-bottom: 6px; line-height: 1.5; }
+.planner-label { font-size: 0.85rem; color: var(--accent); font-weight: 600; margin-top: 8px; }
+.planner-form input, .planner-form select {
+  background: var(--bg); color: var(--text); border: 1px solid #333;
+  border-radius: 8px; padding: 12px; font-size: 1rem; width: 100%;
+}
+.btn-generate-plan {
+  margin-top: 16px; width: 100%; padding: 14px;
+  background: linear-gradient(135deg, #6a4cff, #e94560); color: #fff;
+  border: none; border-radius: var(--radius); font-size: 1rem; font-weight: 700; cursor: pointer;
+}

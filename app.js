@@ -280,21 +280,36 @@ const app = {
   },
 
   // PROGRAMS
+  syncPlanDays(p) {
+    if (!p || !p.isPlan || !p.weeks) return p;
+    const idx = PLANNER.currentWeekIdx(p);
+    p.currentWeekIdx = idx;
+    p.days = p.weeks[idx].days;
+    return p;
+  },
+
   renderPrograms() {
     const all = this.getAllPrograms();
+    // Synchroniser les plans avec la semaine en cours
+    all.forEach(p => this.syncPlanDays(p));
     document.getElementById('program-list').innerHTML =
-      `<button id="btn-new-program" onclick="app.newProgram()">+ Créer un programme</button>` +
+      `<div class="program-tools">
+         <button id="btn-new-program" onclick="app.newProgram()">+ Créer un programme</button>
+         <button id="btn-plan-program" onclick="app.openPlanner()">🧠 Générateur 6 mois</button>
+       </div>` +
       all.map(p => {
         const isCustom = this.customPrograms.some(cp => cp.id === p.id);
-        return `<div class="program-card">
+        const planHeader = p.isPlan ? this.renderPlanHeader(p) : '';
+        return `<div class="program-card${p.isPlan ? ' program-plan' : ''}">
           <div class="program-header">
             <h2>${p.name}</h2>
             ${isCustom ? `<div class="program-actions">
-              <button onclick="app.editProgram('${p.id}')">✏️</button>
+              ${p.isPlan ? '' : `<button onclick="app.editProgram('${p.id}')">✏️</button>`}
               <button onclick="app.deleteProgram('${p.id}')">🗑️</button>
             </div>` : ''}
           </div>
           <p class="program-desc">${p.desc}</p>
+          ${planHeader}
           <div class="program-days">
             ${p.days.map((day, di) => `
               <div class="program-day">
@@ -317,6 +332,131 @@ const app = {
   newProgram() {
     this.editingProgram = { id: 'custom_' + Date.now(), name: '', desc: '', days: [{ name: 'Jour 1', exercises: [] }] };
     this.openProgramEditor();
+  },
+
+  // ---------- PLANIFICATEUR 6 MOIS ----------
+  renderPlanHeader(p) {
+    const idx = p.currentWeekIdx ?? 0;
+    const w = p.weeks[idx];
+    const pct = Math.round(((idx + 1) / 26) * 100);
+    const restNote = p.restRecommended ? `Repos conseillé : ${p.restRecommended}s` : '';
+    return `<div class="plan-header">
+      <div class="plan-week-line">
+        <button class="plan-nav" onclick="app.planShiftWeek('${p.id}', -1)" ${idx === 0 ? 'disabled' : ''}>◀</button>
+        <div class="plan-week-info">
+          <div class="plan-week-num">Semaine ${idx + 1} / 26</div>
+          <div class="plan-week-phase">${w.phase} · RPE cible ${w.rpe}${w.deload ? ' · 🔻 Deload (poids -20%)' : ''}</div>
+        </div>
+        <button class="plan-nav" onclick="app.planShiftWeek('${p.id}', 1)" ${idx === 25 ? 'disabled' : ''}>▶</button>
+      </div>
+      <div class="plan-progress-bar"><div class="plan-progress-fill" style="width:${pct}%"></div></div>
+      <div class="plan-meta">${restNote}${p.manualWeekIdx != null ? ' · <a href="#" onclick="event.preventDefault();app.planResetAuto(\'' + p.id + '\')">↻ auto</a>' : ' · auto-avance'}</div>
+    </div>`;
+  },
+
+  planShiftWeek(pid, delta) {
+    const p = this.customPrograms.find(cp => cp.id === pid);
+    if (!p || !p.isPlan) return;
+    const cur = p.currentWeekIdx ?? PLANNER.currentWeekIdx(p);
+    const next = Math.max(0, Math.min(25, cur + delta));
+    p.manualWeekIdx = next;
+    this.saveCustomPrograms();
+    this.renderPrograms();
+  },
+
+  planResetAuto(pid) {
+    const p = this.customPrograms.find(cp => cp.id === pid);
+    if (!p) return;
+    delete p.manualWeekIdx;
+    this.saveCustomPrograms();
+    this.renderPrograms();
+  },
+
+  openPlanner() {
+    document.getElementById('desc-title').textContent = '🧠 Générateur de programme — 6 mois';
+    document.getElementById('desc-content').innerHTML = `
+      <div class="planner-form">
+        <p class="planner-intro">Réponds à quelques questions, l'app construit un programme cohérent sur <strong>26 semaines</strong> avec progression, deload et techniques d'intensification.</p>
+
+        <label class="planner-label">🎂 Ton âge</label>
+        <input type="number" id="plan-age" min="14" max="90" value="30" inputmode="numeric">
+
+        <label class="planner-label">🎯 Ton objectif</label>
+        <select id="plan-goal">
+          <option value="masse">💪 Prise de masse / hypertrophie</option>
+          <option value="force">🏋️ Gagner en force</option>
+          <option value="perte_gras">🔥 Perdre du gras (sèche / recomposition)</option>
+          <option value="tonification">✨ Tonifier / sculpter</option>
+          <option value="maintien">🛡️ Maintien / forme générale</option>
+        </select>
+
+        <label class="planner-label">📊 Ton niveau</label>
+        <select id="plan-level">
+          <option value="beginner">Débutant (&lt; 6 mois)</option>
+          <option value="intermediate" selected>Intermédiaire (6 mois - 2 ans)</option>
+          <option value="advanced">Avancé (2 ans+)</option>
+        </select>
+
+        <label class="planner-label">🏠 Équipement disponible</label>
+        <select id="plan-equipment">
+          <option value="gym">🏟️ Salle de sport (tout dispo)</option>
+          <option value="home_full">🏠 Maison complète (barre + haltères + banc)</option>
+          <option value="dumbbell_bench" selected>💪 Haltères + banc</option>
+          <option value="dumbbell_only">🏋️ Haltères seuls (pas de banc)</option>
+          <option value="bodyweight">🤸 Poids du corps</option>
+        </select>
+
+        <label class="planner-label">📅 Fréquence (jours/semaine)</label>
+        <select id="plan-frequency">
+          <option value="2">2 jours</option>
+          <option value="3">3 jours</option>
+          <option value="4" selected>4 jours</option>
+          <option value="5">5 jours</option>
+          <option value="6">6 jours</option>
+        </select>
+
+        <button class="btn-generate-plan" onclick="app.createPlanFromForm()">🚀 Générer mon plan 6 mois</button>
+      </div>
+    `;
+    document.getElementById('modal-exo-desc').classList.remove('hidden');
+  },
+
+  createPlanFromForm() {
+    const age = parseInt(document.getElementById('plan-age').value) || 30;
+    const goal = document.getElementById('plan-goal').value;
+    const level = document.getElementById('plan-level').value;
+    const equipment = document.getElementById('plan-equipment').value;
+    const frequency = parseInt(document.getElementById('plan-frequency').value) || 4;
+
+    const result = PLANNER.generate({ age, goal, level, equipment, frequency });
+    if (result.error) {
+      this.showModal({ icon: '⚠️', title: 'Impossible', msg: result.error, confirmText: 'OK', onConfirm: () => {} });
+      return;
+    }
+
+    // S'assurer que tous les exos du plan existent (sinon les ajouter au catalogue)
+    const known = new Set(this.exercises.map(e => e.name));
+    const needed = new Set();
+    result.plan.weeks[0].days.forEach(d => d.exercises.forEach(ex => needed.add(ex.name)));
+    needed.forEach(name => {
+      if (!known.has(name)) {
+        const def = DATA.defaultExercises.find(de => de.name === name);
+        if (def) this.exercises.push(JSON.parse(JSON.stringify(def)));
+      }
+    });
+    this.saveExercises();
+
+    this.customPrograms.push(result.plan);
+    this.saveCustomPrograms();
+    document.getElementById('modal-exo-desc').classList.add('hidden');
+    this.renderExercises();
+    this.renderPrograms();
+    this.showModal({
+      icon: '✅', title: 'Plan créé !',
+      msg: `Ton plan "${result.plan.name}" est prêt. La semaine en cours s'adapte automatiquement à la date.`,
+      confirmText: 'Voir', cancelText: 'OK',
+      onConfirm: () => { this.goTo('programs'); }
+    });
   },
 
   editProgram(id) {
@@ -452,15 +592,17 @@ const app = {
   startProgramDay(pid, di) {
     const prog = this.getAllPrograms().find(p => p.id === pid);
     if (!prog) return;
+    this.syncPlanDays(prog);
     const day = prog.days[di];
+    const defaultRest = prog.restRecommended || 90;
 
     this.showModal({
       icon: '⏱️', title: 'Temps de repos',
       msg: 'Combien de secondes de repos entre les séries ?',
-      input: '90', unit: 'sec', placeholder: '90',
+      input: String(defaultRest), unit: 'sec', placeholder: String(defaultRest),
       confirmText: 'C\'est parti 🚀',
       onConfirm: (val) => {
-        this.restTime = parseInt(val) || 90;
+        this.restTime = parseInt(val) || defaultRest;
         this.restBetweenExos = 180;
         this._launchDay(day);
       }
