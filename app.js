@@ -100,8 +100,13 @@ const app = {
 
     const container = document.getElementById('home-last-session');
     if (!container) return;
+
+    // Carte "Aujourd'hui" si un plan est actif (lancement direct en 1 tap)
+    const todayCard = this.renderPlanTodayCard();
+
     if (!this.history.length) {
-      container.innerHTML = `<div class="last-session-card"><div class="ls-title">Bienvenue !</div><div class="ls-summary">Aucune séance enregistrée. Lance-toi ! 🚀</div></div>`;
+      container.innerHTML = todayCard +
+        `<div class="last-session-card"><div class="ls-title">Bienvenue !</div><div class="ls-summary">Aucune séance enregistrée. Lance-toi ! 🚀</div></div>`;
       return;
     }
     const last = this.history[0];
@@ -110,12 +115,116 @@ const app = {
     const nbExos = last.exercises.length;
     const nbSets = last.exercises.reduce((s, e) => s + e.sets.length, 0);
     const names = last.exercises.map(e => e.name).slice(0, 3).join(', ');
-    container.innerHTML = `<div class="last-session-card" onclick="app.showDetail(${last.id})">
+    container.innerHTML = todayCard + `<div class="last-session-card" onclick="app.showDetail(${last.id})">
       <div class="ls-title">📊 Dernière séance</div>
       <div class="ls-date">${ds}</div>
       <div class="ls-summary">${names}${nbExos > 3 ? '…' : ''}</div>
       <div class="ls-stats"><span class="ls-stat">${nbExos} exos</span><span class="ls-stat">${nbSets} séries</span></div>
     </div>`;
+  },
+
+  // ---------- Plan actif & "Aujourd'hui" ----------
+  getActivePlan() {
+    const plans = this.customPrograms.filter(p => p.isPlan);
+    if (!plans.length) return null;
+    return plans.sort((a, b) => new Date(b.startDate) - new Date(a.startDate))[0];
+  },
+
+  getNextPlanDay(plan) {
+    if (!plan) return null;
+    this.syncPlanDays(plan);
+    const weekIdx = plan.currentWeekIdx ?? 0;
+    const week = plan.weeks[weekIdx];
+    const completed = plan.completedDays || {};
+    for (let i = 0; i < week.days.length; i++) {
+      if (!completed[`${weekIdx}-${i}`]) {
+        return { weekIdx, dayIdx: i, week, day: week.days[i] };
+      }
+    }
+    return { weekIdx, dayIdx: -1, week, day: null, allDone: true };
+  },
+
+  renderPlanTodayCard() {
+    const plan = this.getActivePlan();
+    if (!plan) return '';
+    const next = this.getNextPlanDay(plan);
+    if (!next) return '';
+
+    if (next.allDone) {
+      return `<div class="plan-today-card plan-today-done">
+        <div class="ptc-header">
+          <div class="ptc-emoji">✅</div>
+          <div class="ptc-text">
+            <div class="ptc-title">Semaine ${next.weekIdx + 1} terminée !</div>
+            <div class="ptc-subtitle">${next.week.phase}</div>
+          </div>
+        </div>
+        <div class="ptc-info">Repos avant la prochaine semaine. Continue à bien dormir et manger 💤</div>
+      </div>`;
+    }
+
+    const day = next.day;
+    const week = next.week;
+    const completed = plan.completedDays || {};
+    const dayCompletedCount = week.days.filter((_, i) => completed[`${next.weekIdx}-${i}`]).length;
+    const exoCount = day.exercises.length;
+    const totalSets = day.exercises.reduce((s, e) => s + (e.sets || 0), 0);
+    const estMin = Math.round(totalSets * 1.5 + exoCount * 1.5); // estimation grossière
+
+    return `<div class="plan-today-card" onclick="app.launchPlanToday()">
+      <div class="ptc-header">
+        <div class="ptc-emoji">🚀</div>
+        <div class="ptc-text">
+          <div class="ptc-title">Aujourd'hui — ${day.name}</div>
+          <div class="ptc-subtitle">${plan.name.replace('🧠 ', '')}</div>
+        </div>
+      </div>
+      <div class="ptc-meta">
+        <span class="ptc-tag">Sem ${next.weekIdx + 1}/26</span>
+        <span class="ptc-tag">${week.phase}</span>
+        <span class="ptc-tag rpe-target-badge rpe-${week.rpe}">🎯 RPE ${week.rpe}</span>
+        ${week.deload ? '<span class="ptc-tag deload-badge">🔻 Deload</span>' : ''}
+      </div>
+      <div class="ptc-info">${exoCount} exos · ${totalSets} séries · ~${estMin} min · jour ${dayCompletedCount + 1}/${week.days.length} de la semaine</div>
+      <button class="ptc-launch-btn" onclick="event.stopPropagation();app.launchPlanToday()">🚀 Lancer maintenant</button>
+    </div>`;
+  },
+
+  launchPlanToday() {
+    const plan = this.getActivePlan();
+    if (!plan) return;
+    const next = this.getNextPlanDay(plan);
+    if (!next || next.allDone || next.dayIdx < 0) return;
+    this.startProgramDay(plan.id, next.dayIdx);
+  },
+
+  // Marque la séance courante comme complétée dans le plan, fait avancer la semaine
+  // si tous les jours sont faits, et déclenche un re-render.
+  markPlanDayCompleted() {
+    const ctx = this._currentPlanContext;
+    if (!ctx) return;
+    const plan = this.customPrograms.find(p => p.id === ctx.planId);
+    if (!plan) { this._currentPlanContext = null; return; }
+    plan.completedDays = plan.completedDays || {};
+    plan.completedDays[`${ctx.weekIdx}-${ctx.dayIdx}`] = new Date().toISOString();
+
+    // Migration : si plan créé avant le système de progression, initialiser
+    if (plan.weekProgress == null) plan.weekProgress = ctx.weekIdx;
+
+    // Auto-avancement : si tous les jours de la semaine de progression sont complets,
+    // avancer à la semaine suivante.
+    const progIdx = plan.weekProgress;
+    const week = plan.weeks[progIdx];
+    if (week) {
+      const allDone = week.days.every((_, i) => plan.completedDays[`${progIdx}-${i}`]);
+      if (allDone && progIdx < 25) {
+        plan.weekProgress = progIdx + 1;
+        // Si l'utilisateur naviguait avec ◀▶, on retire l'override pour repasser en auto
+        delete plan.manualWeekIdx;
+      }
+    }
+    this.saveCustomPrograms();
+    this._currentPlanContext = null;
   },
 
   setupNav() {
@@ -328,10 +437,15 @@ const app = {
           <p class="program-desc">${p.desc}</p>
           ${planHeader}
           <div class="program-days">
-            ${p.days.map((day, di) => `
-              <div class="program-day">
-                <div class="day-header"><h3>${day.name}</h3>
-                  <button class="btn-start-day" onclick="app.startProgramDay('${p.id}',${di})">🚀 Lancer</button></div>
+          ${p.days.map((day, di) => {
+            const isPlanDay = p.isPlan;
+            const wkIdx = p.currentWeekIdx ?? 0;
+            const isDone = isPlanDay && p.completedDays && p.completedDays[`${wkIdx}-${di}`];
+            const dayCls = isDone ? 'program-day program-day-done' : 'program-day';
+            return `
+              <div class="${dayCls}">
+                <div class="day-header"><h3>${isDone ? '✅ ' : ''}${day.name}</h3>
+                  <button class="btn-start-day" onclick="app.startProgramDay('${p.id}',${di})">${isDone ? '↻ Refaire' : '🚀 Lancer'}</button></div>
                 <div class="day-exercises">
                   ${day.exercises.map(e => {
                     const tech = e.lastSetTechnique ? DATA.techniques[e.lastSetTechnique] : null;
@@ -341,7 +455,8 @@ const app = {
                   }).join('')}
                 </div>
               </div>
-            `).join('')}
+            `;
+          }).join('')}
           </div>
         </div>`;
       }).join('');
@@ -357,19 +472,28 @@ const app = {
     const idx = p.currentWeekIdx ?? 0;
     const w = p.weeks[idx];
     const pct = Math.round(((idx + 1) / 26) * 100);
-    const restNote = p.restRecommended ? `Repos conseillé : ${p.restRecommended}s` : '';
-    const kgNote = w.deload ? '🔻 Poids ajustés -20% (deload)' : '⚖️ Poids cible = ton poids de travail × ratio de phase';
+    const restNote = p.restRecommended ? `Repos ${p.restRecommended}s` : '';
+    const completed = p.completedDays || {};
+    const doneCount = w.days.filter((_, i) => completed[`${idx}-${i}`]).length;
+    const totalDays = w.days.length;
+    const progressDots = w.days.map((_, i) =>
+      completed[`${idx}-${i}`] ? '<span class="day-dot done">✓</span>' : '<span class="day-dot"></span>'
+    ).join('');
     return `<div class="plan-header">
       <div class="plan-week-line">
         <button class="plan-nav" onclick="app.planShiftWeek('${p.id}', -1)" ${idx === 0 ? 'disabled' : ''}>◀</button>
         <div class="plan-week-info">
           <div class="plan-week-num">Semaine ${idx + 1} / 26</div>
-          <div class="plan-week-phase">${w.phase} · 🎯 RPE cible ${w.rpe}${w.deload ? ' · 🔻 Deload' : ''}</div>
+          <div class="plan-week-phase">${w.phase} · 🎯 RPE ${w.rpe}${w.deload ? ' · 🔻 Deload' : ''}</div>
         </div>
         <button class="plan-nav" onclick="app.planShiftWeek('${p.id}', 1)" ${idx === 25 ? 'disabled' : ''}>▶</button>
       </div>
       <div class="plan-progress-bar"><div class="plan-progress-fill" style="width:${pct}%"></div></div>
-      <div class="plan-meta">${restNote} · ${kgNote}${p.manualWeekIdx != null ? ' · <a href="#" onclick="event.preventDefault();app.planResetAuto(\'' + p.id + '\')">↻ auto</a>' : ' · auto-avance'}</div>
+      <div class="plan-week-progress">
+        <span class="plan-week-progress-label">Séances semaine : ${doneCount}/${totalDays}</span>
+        <span class="plan-week-progress-dots">${progressDots}</span>
+      </div>
+      <div class="plan-meta">${restNote}${p.manualWeekIdx != null ? ' · <a href="#" onclick="event.preventDefault();app.planResetAuto(\'' + p.id + '\')">↻ auto</a>' : ' · auto-avance'}</div>
     </div>`;
   },
 
@@ -614,6 +738,13 @@ const app = {
     this.syncPlanDays(prog);
     const day = prog.days[di];
     const defaultRest = prog.restRecommended || 90;
+
+    // Enregistrer le contexte si c'est un plan, pour marquer la complétion à la fin
+    if (prog.isPlan) {
+      this._currentPlanContext = { planId: pid, weekIdx: prog.currentWeekIdx ?? 0, dayIdx: di };
+    } else {
+      this._currentPlanContext = null;
+    }
 
     this.showModal({
       icon: '⏱️', title: 'Temps de repos',
@@ -1002,6 +1133,9 @@ const app = {
 
     this.proposeWeightAdjustments();
 
+    // Marquer la séance comme complétée dans le plan + auto-avancement de semaine
+    this.markPlanDayCompleted();
+
     // Snapshot automatique après chaque séance (filet de sécurité)
     this.saveSnapshot('après-séance');
 
@@ -1041,7 +1175,6 @@ const app = {
 
       // Ignorer les séries avec technique d'intensification pour la décision
       const normalSets = setsWithData.filter(s => !s.technique);
-      // Si toutes les séries ont une technique, prendre la première (la plus fraîche)
       const referenceSet = normalSets.length > 0 ? normalSets.at(-1) : setsWithData[0];
       const rpe = parseInt(referenceSet.feeling);
       const repsRealized = parseInt(referenceSet.reps);
@@ -1056,25 +1189,47 @@ const app = {
         maxReps = parseInt(parts[parts.length - 1]) || 10;
       }
 
-      // Décision
-      let decision = 'same'; // same, up, down
-      if (repsRealized >= maxReps && rpe <= 8) {
-        decision = 'up';
-      } else if (rpe >= 10 && repsRealized < maxReps - 2) {
-        decision = 'down';
+      let decision = 'same';
+      let newKg = lastKg;
+      let reason = '';
+
+      // 🎯 Mode RPE cible : convergence vers le RPE visé par le plan
+      // 1 point de RPE ≈ 2.5 % de charge (consensus Helms / RTS)
+      if (we.targetRpe) {
+        const targetRpe = parseInt(we.targetRpe);
+        const delta = rpe - targetRpe; // >0 trop dur, <0 trop facile
+        if (Math.abs(delta) >= 1) {
+          const adjPct = -delta * 0.025;
+          const desiredKg = lastKg * (1 + adjPct);
+          // Arrondir au palier muscle (ex. 2.5 kg pour pectoraux)
+          const steps = Math.round((desiredKg - lastKg) / increment);
+          if (steps !== 0) {
+            newKg = Math.max(0, lastKg + steps * increment);
+            decision = steps > 0 ? 'up' : 'down';
+            const arrow = steps > 0 ? '+' : '';
+            reason = `RPE ${rpe} ressenti vs ${targetRpe} cible → ${arrow}${steps * increment} kg pour atteindre la zone visée`;
+          }
+        }
       }
 
-      if (decision === 'same') return;
+      // Mode classique (fallback si pas de targetRpe — programmes non-plan)
+      if (decision === 'same' && !we.targetRpe) {
+        if (repsRealized >= maxReps && rpe <= 8) {
+          decision = 'up';
+          newKg = lastKg + increment;
+          reason = `${repsRealized} reps (obj : ${maxReps}) à RPE ${rpe} → prêt à monter`;
+        } else if (rpe >= 10 && repsRealized < maxReps - 2) {
+          decision = 'down';
+          newKg = Math.max(0, lastKg - increment);
+          reason = `RPE 10 avec ${repsRealized} reps (obj : ${maxReps}) → trop lourd`;
+        }
+      }
 
-      const newKg = decision === 'up'
-        ? lastKg + increment
-        : Math.max(0, lastKg - increment);
-
-      if (newKg === lastKg) return;
+      if (decision === 'same' || newKg === lastKg) return;
 
       proposals.push({
         exo, name: we.name, lastKg, newKg, increment, decision,
-        rpe, repsRealized, maxReps, muscle: exo.muscle
+        rpe, repsRealized, maxReps, muscle: exo.muscle, reason
       });
     });
 
@@ -1084,12 +1239,9 @@ const app = {
       if (i >= proposals.length) return;
       const p = proposals[i];
       const arrow = p.decision === 'up' ? '⬆️' : '⬇️';
-      const reason = p.decision === 'up'
-        ? `${p.repsRealized} reps (obj: ${p.maxReps}) à RPE ${p.rpe} → prêt à monter`
-        : `RPE 10 avec ${p.repsRealized} reps (obj: ${p.maxReps}) → trop lourd`;
       this.showModal({
         icon: arrow, title: p.name,
-        msg: `${p.muscle} — palier ${p.increment} kg\n${reason}\n\n${p.lastKg} kg → ${p.newKg} kg`,
+        msg: `${p.muscle} — palier ${p.increment} kg\n${p.reason}\n\n${p.lastKg} kg → ${p.newKg} kg`,
         confirmText: `Valider ${p.newKg} kg`, cancelText: `Garder ${p.lastKg} kg`,
         onConfirm: () => {
           p.exo.defaultKg = p.newKg;

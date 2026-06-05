@@ -238,6 +238,10 @@ const PLANNER = {
       startDate,
       restRecommended: 90 + ageMod.restAdd,
       weeks,
+      // Avancement par complétion : weekProgress augmente quand toutes les séances
+      // de la semaine courante sont marquées comme faites dans completedDays.
+      weekProgress: 0,
+      completedDays: {},
       // days = synchronisé avec la semaine en cours (mis à jour dynamiquement)
       days: weeks[0].days
     };
@@ -279,11 +283,15 @@ const PLANNER = {
   },
 
   // ---------- Calcul de la semaine en cours ----------
+  // Priorité : override manuel ◀▶ > avancement par complétion > legacy date-based
   currentWeekIdx(plan) {
-    if (plan.manualWeekIdx != null) return Math.max(0, Math.min(25, plan.manualWeekIdx));
+    const clamp = (n) => Math.max(0, Math.min(25, n));
+    if (plan.manualWeekIdx != null) return clamp(plan.manualWeekIdx);
+    if (plan.weekProgress != null) return clamp(plan.weekProgress);
+    // Fallback : ancienne logique date-based (compatibilité avec plans créés avant)
     const start = new Date(plan.startDate).getTime();
     const diff = (Date.now() - start) / (7 * 24 * 3600 * 1000);
-    return Math.max(0, Math.min(25, Math.floor(diff)));
+    return clamp(Math.floor(diff));
   },
 
   // ---------- Libellés ----------
@@ -297,5 +305,7 @@ const PLANNER = {
     return ({ beginner: 'débutant', intermediate: 'intermédiaire', advanced: 'avancé' })[l] || l;
   },
 };
+
+
 
 

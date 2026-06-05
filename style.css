@@ -687,3 +687,57 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
 .storage-line { color: var(--text); }
 .storage-line.storage-ok { color: #8bc34a; font-weight: 600; }
 .storage-line.storage-warn { color: var(--warning); font-weight: 600; }
+
+/* Carte "Aujourd'hui" sur l'accueil (lancement direct du plan en cours) */
+.plan-today-card {
+  background: linear-gradient(135deg, rgba(106,76,255,0.20), rgba(233,69,96,0.20));
+  border: 1px solid rgba(106,76,255,0.4);
+  border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 12px;
+  cursor: pointer;
+}
+.plan-today-card.plan-today-done {
+  background: rgba(78,204,163,0.12);
+  border-color: rgba(78,204,163,0.4);
+  cursor: default;
+}
+.ptc-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.ptc-emoji { font-size: 2rem; line-height: 1; }
+.ptc-text { flex: 1; min-width: 0; }
+.ptc-title { font-size: 1rem; font-weight: 800; color: var(--text); }
+.ptc-subtitle { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+.ptc-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.ptc-tag {
+  padding: 3px 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 700;
+  background: rgba(255,255,255,0.06); color: var(--text);
+}
+.ptc-info { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; }
+.ptc-launch-btn {
+  width: 100%; padding: 12px; border: none; border-radius: var(--radius);
+  background: linear-gradient(135deg, #6a4cff, #e94560);
+  color: #fff; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+}
+
+/* Compteur de complétion dans le header du plan */
+.plan-week-progress {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 8px; font-size: 0.78rem; color: var(--text);
+}
+.plan-week-progress-label { font-weight: 600; }
+.plan-week-progress-dots { display: flex; gap: 4px; flex: 1; justify-content: flex-end; }
+.day-dot {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 1.5px solid #555; display: inline-flex;
+  align-items: center; justify-content: center;
+  font-size: 0.7rem; font-weight: 700;
+}
+.day-dot.done { background: var(--success); border-color: var(--success); color: #111; }
+
+/* Jours marqués comme faits dans la liste des programmes */
+.program-day.program-day-done {
+  opacity: 0.65;
+  border-left: 3px solid var(--success);
+}
+.program-day.program-day-done .btn-start-day {
+  background: var(--card); color: var(--muted);
+}
