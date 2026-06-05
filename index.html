@@ -13,6 +13,9 @@
 </head>
 <body>
 
+  <!-- FLASH PLEIN ÉCRAN POUR LES TIMERS (utile en mode silencieux) -->
+  <div id="timer-flash" class="hidden"></div>
+
   <!-- MINI PLAYER SPOTIFY -->
   <div id="spotify-mini" class="hidden">
     <div id="spotify-mini-embed"></div>
@@ -329,6 +332,21 @@
       <button class="settings-btn import" onclick="app.showImportModal()">📥 Importer</button>
       <input type="file" id="import-file" accept=".json" style="display:none" onchange="app.importData(event)">
     </div>
+    <div class="settings-section">
+      <h2>🔔 Audio des timers</h2>
+      <p class="settings-desc">
+        Par défaut, les bips se mixent avec Spotify (catégorie audio « ambient »). En mode silencieux iOS, ils restent muets — c'est volontaire.
+        Active <strong>Bypass silencieux</strong> pour entendre le timer même si l'interrupteur muet est activé. ⚠️ Cette option utilise une astuce vidéo qui peut <strong>interrompre Spotify</strong>.
+      </p>
+      <label class="settings-switch">
+        <input type="checkbox" id="setting-bypass-mute" onchange="app.toggleBypassMute(this.checked)">
+        <span class="settings-switch-label">Bypass mode silencieux iOS (peut couper Spotify)</span>
+      </label>
+      <p class="settings-desc" style="margin-top:8px;font-size:0.78rem;">
+        💡 En mode silencieux, l'app fournit aussi un <strong>flash plein écran</strong> et une <strong>vibration intense</strong> à la fin du timer.
+      </p>
+    </div>
+
     <div class="settings-section">
       <h2>🗑️ Données</h2>
       <button class="settings-btn danger" onclick="app.resetAllData()">⚠️ Réinitialiser toutes les données</button>

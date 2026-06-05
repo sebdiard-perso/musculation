@@ -284,7 +284,17 @@ const app = {
     if (!p || !p.isPlan || !p.weeks) return p;
     const idx = PLANNER.currentWeekIdx(p);
     p.currentWeekIdx = idx;
-    p.days = p.weeks[idx].days;
+    const w = p.weeks[idx];
+    // Cloner les days pour appliquer kg cible + RPE sans contaminer la définition du plan
+    p.days = w.days.map(d => ({
+      name: d.name,
+      exercises: d.exercises.map(ex => {
+        const userExo = this.exercises.find(e => e.name === ex.name);
+        const baseKg = userExo?.defaultKg || 0;
+        const targetKg = PLANNER.computeTargetKg(baseKg, ex.reps, w.deload);
+        return { ...ex, kg: targetKg, targetRpe: w.rpe, deload: w.deload };
+      })
+    }));
     return p;
   },
 
@@ -319,7 +329,8 @@ const app = {
                   ${day.exercises.map(e => {
                     const tech = e.lastSetTechnique ? DATA.techniques[e.lastSetTechnique] : null;
                     const t = tech ? `<span class="day-tech" style="color:${tech.color}">${tech.emoji} ${tech.label} <button class="btn-tech-info" onclick="event.stopPropagation();app.showTechniqueDetail('${e.lastSetTechnique}')">ℹ️</button></span>` : '';
-                    return `<div class="day-exo">${e.name} — ${e.sets}×${e.reps} ${t}</div>`;
+                    const kgInfo = (p.isPlan && e.kg) ? ` <span class="day-kg">@ ${e.kg}kg</span>` : '';
+                    return `<div class="day-exo">${e.name} — ${e.sets}×${e.reps}${kgInfo} ${t}</div>`;
                   }).join('')}
                 </div>
               </div>
@@ -340,17 +351,18 @@ const app = {
     const w = p.weeks[idx];
     const pct = Math.round(((idx + 1) / 26) * 100);
     const restNote = p.restRecommended ? `Repos conseillé : ${p.restRecommended}s` : '';
+    const kgNote = w.deload ? '🔻 Poids ajustés -20% (deload)' : '⚖️ Poids cible = ton poids de travail × ratio de phase';
     return `<div class="plan-header">
       <div class="plan-week-line">
         <button class="plan-nav" onclick="app.planShiftWeek('${p.id}', -1)" ${idx === 0 ? 'disabled' : ''}>◀</button>
         <div class="plan-week-info">
           <div class="plan-week-num">Semaine ${idx + 1} / 26</div>
-          <div class="plan-week-phase">${w.phase} · RPE cible ${w.rpe}${w.deload ? ' · 🔻 Deload (poids -20%)' : ''}</div>
+          <div class="plan-week-phase">${w.phase} · 🎯 RPE cible ${w.rpe}${w.deload ? ' · 🔻 Deload' : ''}</div>
         </div>
         <button class="plan-nav" onclick="app.planShiftWeek('${p.id}', 1)" ${idx === 25 ? 'disabled' : ''}>▶</button>
       </div>
       <div class="plan-progress-bar"><div class="plan-progress-fill" style="width:${pct}%"></div></div>
-      <div class="plan-meta">${restNote}${p.manualWeekIdx != null ? ' · <a href="#" onclick="event.preventDefault();app.planResetAuto(\'' + p.id + '\')">↻ auto</a>' : ' · auto-avance'}</div>
+      <div class="plan-meta">${restNote} · ${kgNote}${p.manualWeekIdx != null ? ' · <a href="#" onclick="event.preventDefault();app.planResetAuto(\'' + p.id + '\')">↻ auto</a>' : ' · auto-avance'}</div>
     </div>`;
   },
 
@@ -624,7 +636,8 @@ const app = {
           technique: (isLast && pe.lastSetTechnique) ? pe.lastSetTechnique : '' });
       }
       return { exerciseId: exo ? exo.id : 0, name: pe.name, muscle: exo ? exo.muscle : '',
-        video: exo ? exo.video || '' : '', targetReps: pe.reps, suggestion: sug, sets };
+        video: exo ? exo.video || '' : '', targetReps: pe.reps, suggestion: sug,
+        targetRpe: pe.targetRpe || null, deload: !!pe.deload, sets };
     });
 
     this.guidedMode = true;
@@ -668,8 +681,10 @@ const app = {
 
     // Nom + muscle
     document.getElementById('guided-exo-name').textContent = exo.name;
+    const rpeBadge = exo.targetRpe ? ` · <span class="rpe-target-badge rpe-${exo.targetRpe}">🎯 RPE ${exo.targetRpe}</span>` : '';
+    const deloadBadge = exo.deload ? ' · <span class="deload-badge">🔻 Deload</span>' : '';
     document.getElementById('guided-exo-muscle').innerHTML =
-      `${exo.muscle}${exo.targetReps ? ` — Objectif : ${exo.targetReps}` : ''}`;
+      `${exo.muscle}${exo.targetReps ? ` — Objectif : ${exo.targetReps}` : ''}${rpeBadge}${deloadBadge}`;
 
     // Série en cours
     const rpLabel = isRestPause && this.restPauseCount > 0 ? ` (rest-pause ${this.restPauseCount}/3)` : '';
@@ -717,8 +732,13 @@ const app = {
     this._afterRpe();
   },
 
-  showRpeModal(afterCb) {
+  showRpeModal(afterCb, targetRpe) {
     this._afterRpe = afterCb;
+    document.querySelectorAll('#modal-rpe .rpe-btn').forEach(b => b.classList.remove('rpe-target'));
+    if (targetRpe) {
+      const btn = document.querySelector('#modal-rpe .rpe-btn.rpe-' + targetRpe);
+      if (btn) btn.classList.add('rpe-target');
+    }
     document.getElementById('modal-rpe').classList.remove('hidden');
   },
 
@@ -809,7 +829,7 @@ const app = {
 
     // Demander le RPE avant de continuer
     if (!set.feeling) {
-      this.showRpeModal(() => this._continueAfterRpe());
+      this.showRpeModal(() => this._continueAfterRpe(), exo.targetRpe);
       return;
     }
     this._continueAfterRpe();
@@ -1264,6 +1284,12 @@ const app = {
     if (el('stats-exos')) el('stats-exos').textContent = this.exercises.length;
     if (el('stats-sessions')) el('stats-sessions').textContent = this.history.length;
     if (el('stats-programs')) el('stats-programs').textContent = this.customPrograms.length;
+    const cb = el('setting-bypass-mute');
+    if (cb) cb.checked = !!timer.bypassMute;
+  },
+
+  toggleBypassMute(enabled) {
+    timer.setBypassMute(enabled);
   },
 
   // SPOTIFY

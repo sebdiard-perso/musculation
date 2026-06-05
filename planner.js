@@ -251,6 +251,33 @@ const PLANNER = {
     return lo + '-' + lo;
   },
 
+  // ---------- Calcul du poids cible par rapport au defaultKg utilisateur ----------
+  // defaultKg est supposé être le poids de travail "8-10 reps" (~75% 1RM).
+  // On déduit un facteur d'ajustement selon la plage de reps de la semaine.
+  repFactor(reps) {
+    if (!reps) return 0.72;
+    if (reps === '21') return 0.45;
+    const hi = parseInt(String(reps).replace(/\/jambe/, '').split('-').pop()) || 10;
+    if (hi <= 5) return 0.90;
+    if (hi <= 6) return 0.85;
+    if (hi <= 8) return 0.80;
+    if (hi <= 10) return 0.75;
+    if (hi <= 12) return 0.72;
+    if (hi <= 15) return 0.65;
+    if (hi <= 20) return 0.60;
+    return 0.55;
+  },
+
+  // Calcule le poids cible pour un exercice donné en fonction du defaultKg
+  // de l'utilisateur, des reps de la semaine et de l'état deload.
+  computeTargetKg(defaultKg, reps, deload) {
+    if (!defaultKg) return 0;
+    const ratio = this.repFactor(reps) / 0.75; // 8-10 reps comme référence
+    const factor = ratio * (deload ? 0.80 : 1);
+    // Arrondi au demi-kilo le plus proche
+    return Math.max(0, Math.round(defaultKg * factor * 2) / 2);
+  },
+
   // ---------- Calcul de la semaine en cours ----------
   currentWeekIdx(plan) {
     if (plan.manualWeekIdx != null) return Math.max(0, Math.min(25, plan.manualWeekIdx));
@@ -270,4 +297,5 @@ const PLANNER = {
     return ({ beginner: 'débutant', intermediate: 'intermédiaire', advanced: 'avancé' })[l] || l;
   },
 };
+
 
