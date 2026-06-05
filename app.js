@@ -44,6 +44,13 @@ const app = {
     this.setupNav();
     timer.init();
     this.renderAll();
+    // Filets de sécurité contre la perte de données :
+    // 1. Demande de stockage persistant (iOS 16.4+, Chrome, etc.)
+    this.requestPersist(true);
+    // 2. Snapshot automatique quotidien si > 24 h depuis le dernier
+    this.maybeAutoSnapshot();
+    // 3. Détection des mises à jour de Service Worker (PWA)
+    this.setupServiceWorker();
   },
 
   migrate() {
@@ -131,7 +138,7 @@ const app = {
     }
     document.getElementById(`view-${view}`).classList.add('active');
     if (view === 'calendar') calendar.render(this.history);
-    if (view === 'settings') this.updateStats();
+    if (view === 'settings') { this.updateStats(); this.renderSnapshots(); this.showStorageStatus(); }
     if (view === 'spotify') { this.renderSpotify(); }
     else if (this.currentSpotifyUri) this.showSpotifyMini();
     window.scrollTo(0, 0);
@@ -995,6 +1002,9 @@ const app = {
 
     this.proposeWeightAdjustments();
 
+    // Snapshot automatique après chaque séance (filet de sécurité)
+    this.saveSnapshot('après-séance');
+
     this.currentWorkout = [];
     this.guidedMode = false;
     this.guidedExoIndex = 0;
@@ -1136,7 +1146,7 @@ const app = {
   searchVideoByName(name) { window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(name + ' musculation tuto')}`, '_blank'); },
 
   // EXPORT / IMPORT
-  exportData() {
+  async exportData() {
     const data = {
       version: 1,
       date: new Date().toISOString(),
@@ -1145,7 +1155,33 @@ const app = {
       customPrograms: this.customPrograms,
     };
     const json = JSON.stringify(data);
+    const filename = `muscutracker-${new Date().toISOString().slice(0, 10)}.json`;
 
+    // 📲 Partage natif (iOS share sheet, Android, etc.) — bien plus pratique
+    // que copier-coller du JSON sur mobile.
+    try {
+      const file = new File([json], filename, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Sauvegarde MuscuTracker' });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return; // l'utilisateur a annulé
+      // sinon, on tombe dans le fallback ci-dessous
+    }
+
+    // Fallback : téléchargement (desktop) + textarea (vieux navigateurs)
+    try {
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+      return;
+    } catch (e) {}
+
+    // Dernier recours : ancien flow textarea
     document.getElementById('desc-title').textContent = '📤 Exporter les données';
     document.getElementById('desc-content').innerHTML = `
       <p style="color:var(--muted);margin-bottom:12px;">Copie le texte ci-dessous et colle-le dans un fichier .json, ou envoie-le par message/mail.</p>
@@ -1275,8 +1311,229 @@ const app = {
       icon: '⚠️', title: 'Tout supprimer ?',
       msg: 'Exercices, historique, programmes… Cette action est irréversible.',
       confirmText: 'Tout supprimer', confirmClass: 'modal-btn-danger',
-      onConfirm: () => { localStorage.clear(); location.reload(); }
+      onConfirm: () => {
+        // Snapshot de sécurité avant le wipe (ne touche pas la clé "snapshots")
+        this.saveSnapshot('avant-réinitialisation');
+        const snaps = localStorage.getItem('snapshots');
+        localStorage.clear();
+        if (snaps) localStorage.setItem('snapshots', snaps);
+        location.reload();
+      }
     });
+  },
+
+  // ---------- Snapshots automatiques (restauration en un tap) ----------
+  saveSnapshot(reason = 'auto') {
+    const snap = {
+      version: 1,
+      date: new Date().toISOString(),
+      reason,
+      exercises: this.exercises,
+      history: this.history,
+      customPrograms: this.customPrograms,
+    };
+    let snapshots;
+    try { snapshots = JSON.parse(localStorage.getItem('snapshots') || '[]'); } catch (e) { snapshots = []; }
+    snapshots.unshift(snap);
+    while (snapshots.length > 5) snapshots.pop();
+    try {
+      localStorage.setItem('snapshots', JSON.stringify(snapshots));
+    } catch (e) {
+      // QuotaExceeded → on garde seulement les 2 plus récents
+      try { localStorage.setItem('snapshots', JSON.stringify(snapshots.slice(0, 2))); } catch (_) {}
+    }
+  },
+
+  restoreSnapshot(idx) {
+    let snapshots;
+    try { snapshots = JSON.parse(localStorage.getItem('snapshots') || '[]'); } catch (e) { snapshots = []; }
+    const snap = snapshots[idx];
+    if (!snap) return;
+    const d = new Date(snap.date);
+    const ds = d.toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    this.showModal({
+      icon: '↻', title: 'Restaurer cette sauvegarde ?',
+      msg: `Du ${ds}\n${(snap.history || []).length} séances · ${(snap.exercises || []).length} exos · ${(snap.customPrograms || []).length} programmes\n\n⚠️ Tes données actuelles seront remplacées (un snapshot de sauvegarde est créé avant).`,
+      confirmText: 'Restaurer', confirmClass: 'modal-btn-confirm',
+      onConfirm: () => {
+        // Snapshot de sécurité avant restauration
+        this.saveSnapshot('avant-restauration');
+        this.exercises = snap.exercises || [];
+        this.history = snap.history || [];
+        this.customPrograms = snap.customPrograms || [];
+        this.saveExercises();
+        this.saveHistory();
+        this.saveCustomPrograms();
+        this.renderAll();
+        this.renderSnapshots();
+        alert('Sauvegarde restaurée ! 🎉');
+      }
+    });
+  },
+
+  deleteSnapshot(idx) {
+    this.showModal({
+      icon: '🗑️', title: 'Supprimer ce snapshot ?',
+      msg: 'Action irréversible.',
+      confirmText: 'Supprimer', confirmClass: 'modal-btn-danger',
+      onConfirm: () => {
+        let snapshots;
+        try { snapshots = JSON.parse(localStorage.getItem('snapshots') || '[]'); } catch (e) { return; }
+        snapshots.splice(idx, 1);
+        localStorage.setItem('snapshots', JSON.stringify(snapshots));
+        this.renderSnapshots();
+      }
+    });
+  },
+
+  renderSnapshots() {
+    const list = document.getElementById('snapshots-list');
+    if (!list) return;
+    let snapshots;
+    try { snapshots = JSON.parse(localStorage.getItem('snapshots') || '[]'); } catch (e) { snapshots = []; }
+    if (!snapshots.length) {
+      list.innerHTML = '<p class="settings-desc" style="font-size:0.8rem;font-style:italic;">Aucune sauvegarde automatique pour l\'instant. Le 1er snapshot sera créé après ta prochaine séance.</p>';
+      return;
+    }
+    list.innerHTML = snapshots.map((s, i) => {
+      const d = new Date(s.date);
+      const ds = d.toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      const reasonIcon = {
+        'auto': '⏱️',
+        'après-séance': '✅',
+        'avant-restauration': '🛟',
+        'avant-réinitialisation': '⚠️',
+      }[s.reason] || '⏱️';
+      return `<div class="snapshot-item">
+        <div class="snapshot-info">
+          <div class="snapshot-date">${reasonIcon} ${ds}</div>
+          <div class="snapshot-stats">${(s.history || []).length} séances · ${(s.exercises || []).length} exos · ${(s.customPrograms || []).length} prog · <em>${s.reason || 'auto'}</em></div>
+        </div>
+        <div class="snapshot-actions">
+          <button class="snapshot-restore" onclick="app.restoreSnapshot(${i})">↻</button>
+          <button class="snapshot-delete" onclick="app.deleteSnapshot(${i})">🗑️</button>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  // Bouton direct "choisir un fichier" (sans modal intermédiaire)
+  pickImportFile() {
+    document.getElementById('import-file').click();
+  },
+
+  // ---------- PERSISTANCE DU STOCKAGE & MISES À JOUR ----------
+  async requestPersist(silent = false) {
+    if (!navigator.storage || !navigator.storage.persist) {
+      if (!silent) this.showModal({ icon: 'ℹ️', title: 'Non supporté', msg: 'Ton navigateur ne supporte pas l\'API de persistance. Utilise plutôt les exports manuels.', confirmText: 'OK', onConfirm: () => {} });
+      this.showStorageStatus();
+      return;
+    }
+    try {
+      const already = await navigator.storage.persisted();
+      if (already) { this.showStorageStatus(); return; }
+      const granted = await navigator.storage.persist();
+      this.showStorageStatus();
+      if (!silent && !granted) {
+        this.showModal({
+          icon: '⚠️', title: 'Persistance refusée',
+          msg: 'iOS n\'a pas accordé le stockage persistant cette fois. Réessaye après quelques séances supplémentaires (iOS l\'accorde plus volontiers aux PWAs installées et utilisées régulièrement).',
+          confirmText: 'OK', onConfirm: () => {}
+        });
+      }
+    } catch (e) { this.showStorageStatus(); }
+  },
+
+  async showStorageStatus() {
+    const el = document.getElementById('storage-status');
+    if (!el) return;
+    const lines = [];
+    let persisted = false;
+    if (navigator.storage && navigator.storage.persisted) {
+      try { persisted = await navigator.storage.persisted(); } catch (e) {}
+    }
+    lines.push(persisted
+      ? '<div class="storage-line storage-ok">✅ Stockage persistant — données protégées contre l\'éviction iOS</div>'
+      : '<div class="storage-line storage-warn">⚠️ Stockage non persistant — peut être nettoyé par iOS</div>');
+    if (navigator.storage && navigator.storage.estimate) {
+      try {
+        const e = await navigator.storage.estimate();
+        if (e.usage != null && e.quota != null) {
+          const usedKB = Math.round(e.usage / 1024);
+          const quotaMB = Math.round(e.quota / (1024 * 1024));
+          lines.push(`<div class="storage-line">💾 ${usedKB.toLocaleString('fr-FR')} Ko utilisés sur ~${quotaMB.toLocaleString('fr-FR')} Mo disponibles</div>`);
+        }
+      } catch (e) {}
+    }
+    let snaps;
+    try { snaps = JSON.parse(localStorage.getItem('snapshots') || '[]'); } catch (e) { snaps = []; }
+    if (snaps[0]) {
+      const ds = new Date(snaps[0].date).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      lines.push(`<div class="storage-line">📸 Dernier snapshot : ${ds}</div>`);
+    }
+    el.innerHTML = lines.join('');
+    const btn = document.getElementById('btn-persist');
+    if (btn) btn.style.display = persisted ? 'none' : 'block';
+  },
+
+  maybeAutoSnapshot() {
+    if (!this.history.length && !this.customPrograms.length) return;
+    let snaps;
+    try { snaps = JSON.parse(localStorage.getItem('snapshots') || '[]'); } catch (e) { snaps = []; }
+    const last = snaps[0];
+    if (!last) { this.saveSnapshot('démarrage'); return; }
+    const elapsed = Date.now() - new Date(last.date).getTime();
+    if (elapsed > 24 * 3600 * 1000) this.saveSnapshot('quotidien');
+  },
+
+  setupServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // Nouvelle version installée alors qu'une ancienne contrôle déjà la page
+      const offerUpdate = (worker) => {
+        if (!worker) return;
+        if (navigator.serviceWorker.controller) this._pendingUpdateWorker = worker;
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            this._pendingUpdateWorker = worker;
+            this.showUpdateBanner();
+          }
+        });
+      };
+      if (reg.waiting) offerUpdate(reg.waiting);
+      reg.addEventListener('updatefound', () => offerUpdate(reg.installing));
+    }).catch(() => {});
+
+    // Quand le nouveau SW prend le contrôle, recharger pour servir le nouveau JS
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+  },
+
+  showUpdateBanner() {
+    const el = document.getElementById('update-banner');
+    if (el) el.classList.remove('hidden');
+  },
+
+  dismissUpdate() {
+    const el = document.getElementById('update-banner');
+    if (el) el.classList.add('hidden');
+  },
+
+  applyUpdate() {
+    // Snapshot de sécurité juste avant la MAJ (en plus du backup manuel
+    // que l'utilisateur peut faire avec l'autre bouton)
+    this.saveSnapshot('avant-mise-à-jour');
+    const w = this._pendingUpdateWorker;
+    if (w) {
+      w.postMessage({ type: 'SKIP_WAITING' });
+      // Le 'controllerchange' rechargera la page automatiquement.
+    } else {
+      window.location.reload();
+    }
   },
 
   updateStats() {
@@ -1395,4 +1652,3 @@ const app = {
 };
 
 app.init();
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

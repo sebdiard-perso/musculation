@@ -16,6 +16,21 @@
   <!-- FLASH PLEIN ÉCRAN POUR LES TIMERS (utile en mode silencieux) -->
   <div id="timer-flash" class="hidden"></div>
 
+  <!-- BANDEAU MISE À JOUR -->
+  <div id="update-banner" class="hidden">
+    <div class="update-banner-content">
+      <div class="update-banner-text">
+        <strong>🚀 Mise à jour disponible</strong>
+        <span>Sauvegarde tes données avant si tu veux être tranquille.</span>
+      </div>
+      <div class="update-banner-actions">
+        <button class="update-btn-backup" onclick="app.exportData()">📤 Sauvegarder</button>
+        <button class="update-btn-apply" onclick="app.applyUpdate()">✅ Mettre à jour</button>
+        <button class="update-btn-later" onclick="app.dismissUpdate()">×</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MINI PLAYER SPOTIFY -->
   <div id="spotify-mini" class="hidden">
     <div id="spotify-mini-embed"></div>
@@ -328,9 +343,23 @@
     <div class="settings-section">
       <h2>📦 Sauvegarde des données</h2>
       <p class="settings-desc">Exporte tes données pour les transférer sur un autre appareil ou faire un backup.</p>
-      <button class="settings-btn export" onclick="app.exportData()">📤 Exporter (JSON)</button>
-      <button class="settings-btn import" onclick="app.showImportModal()">📥 Importer</button>
-      <input type="file" id="import-file" accept=".json" style="display:none" onchange="app.importData(event)">
+      <button class="settings-btn export" onclick="app.exportData()">📤 Exporter / Partager</button>
+      <button class="settings-btn import" onclick="app.pickImportFile()">📁 Choisir un fichier à importer</button>
+      <button class="settings-btn" style="background:var(--card);color:var(--muted);" onclick="app.showImportModal()">…ou coller du JSON</button>
+      <input type="file" id="import-file" accept=".json,application/json" style="display:none" onchange="app.importData(event)">
+    </div>
+
+    <div class="settings-section">
+      <h2>↻ Sauvegardes automatiques</h2>
+      <p class="settings-desc">Snapshots créés sur ton téléphone après chaque séance, avant toute restauration ou réinitialisation. Restaure en un tap si besoin.</p>
+      <div id="snapshots-list"></div>
+    </div>
+
+    <div class="settings-section">
+      <h2>🛡️ Persistance du stockage</h2>
+      <p class="settings-desc">Sur iOS, sans persistance explicite, tes données peuvent être évincées par le système après une longue inactivité ou en cas de manque de mémoire. Active la persistance pour t'en prémunir.</p>
+      <div id="storage-status" class="storage-status">…</div>
+      <button class="settings-btn import" id="btn-persist" onclick="app.requestPersist()" style="display:none;">🛡️ Activer le stockage persistant</button>
     </div>
     <div class="settings-section">
       <h2>🔔 Audio des timers</h2>
