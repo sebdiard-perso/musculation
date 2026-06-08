@@ -372,7 +372,7 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
   border-radius: 24px 24px 0 0;
 }
 .modal-custom-content h2 { margin-bottom: 8px; }
-.modal-custom-content p { color: var(--muted); font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px; }
+.modal-custom-content p { color: var(--muted); font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px; white-space: pre-line; }
 #modal-custom-icon { font-size: 2.5rem; margin-bottom: 12px; }
 #modal-custom-input-wrap {
   display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px;
@@ -741,3 +741,41 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
 .program-day.program-day-done .btn-start-day {
   background: var(--card); color: var(--muted);
 }
+
+/* ---------- ASSISTANT IA ---------- */
+#assistant-chat { display: flex; flex-direction: column; height: calc(100vh - 140px); }
+#assistant-messages {
+  flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+}
+.ai-msg {
+  padding: 10px 14px; border-radius: 14px; max-width: 85%; font-size: 0.9rem; line-height: 1.5;
+  animation: fadeIn 0.2s;
+}
+.ai-msg-user {
+  align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px;
+}
+.ai-msg-bot {
+  align-self: flex-start; background: var(--card); color: var(--text); border-bottom-left-radius: 4px;
+}
+#assistant-suggestions {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px;
+}
+.assistant-suggestion {
+  padding: 6px 12px; border-radius: 20px; border: 1px solid var(--accent); background: transparent;
+  color: var(--accent); font-size: 0.8rem; cursor: pointer; white-space: nowrap;
+}
+.assistant-suggestion:active { background: var(--accent); color: #fff; }
+#assistant-input-row {
+  display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #333;
+}
+#assistant-input {
+  flex: 1; padding: 10px 14px; border-radius: 20px; border: 1px solid #444;
+  background: var(--bg); color: var(--text); font-size: 0.9rem;
+}
+#assistant-input:focus { border-color: var(--accent); outline: none; }
+#assistant-input-row button {
+  width: 42px; height: 42px; border-radius: 50%; border: none;
+  background: var(--accent); color: #fff; font-size: 1.2rem; cursor: pointer;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+

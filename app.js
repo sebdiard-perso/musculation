@@ -241,13 +241,14 @@ const app = {
     const navBtn = document.querySelector(`[data-view="${view}"]`);
     if (navBtn) navBtn.classList.add('active');
     // Sous-vues : garder "Plus" actif
-    if (['calendar','exercises','history','settings','spotify'].includes(view)) {
+    if (['calendar','exercises','history','settings','spotify','assistant'].includes(view)) {
       const moreBtn = document.querySelector('[data-view="more"]');
       if (moreBtn) moreBtn.classList.add('active');
     }
     document.getElementById(`view-${view}`).classList.add('active');
     if (view === 'calendar') calendar.render(this.history);
     if (view === 'settings') { this.updateStats(); this.renderSnapshots(); this.showStorageStatus(); }
+    if (view === 'assistant') this.renderAssistant();
     if (view === 'spotify') { this.renderSpotify(); }
     else if (this.currentSpotifyUri) this.showSpotifyMini();
     window.scrollTo(0, 0);
@@ -522,7 +523,7 @@ const app = {
         <p class="planner-intro">Réponds à quelques questions, l'app construit un programme cohérent sur <strong>26 semaines</strong> avec progression, deload et techniques d'intensification.</p>
 
         <label class="planner-label">🎂 Ton âge</label>
-        <input type="number" id="plan-age" min="14" max="90" value="30" inputmode="numeric">
+        <input type="number" id="plan-age" min="14" max="90" value="${localStorage.getItem('userAge') || '30'}" inputmode="numeric">
 
         <label class="planner-label">🎯 Ton objectif</label>
         <select id="plan-goal">
@@ -660,10 +661,20 @@ const app = {
     `).join('');
 
     document.getElementById('desc-title').textContent = p.name ? 'Modifier programme' : 'Nouveau programme';
+    const restVal = p.restTime || 90;
+    const restExosVal = p.restBetweenExos || 180;
     document.getElementById('desc-content').innerHTML = `
       <div class="editor-form">
         <input type="text" id="editor-name" value="${p.name}" placeholder="Nom du programme" class="editor-input-big">
         <input type="text" id="editor-desc" value="${p.desc}" placeholder="Description" class="editor-input-big">
+        <div class="editor-rest-row" style="display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap;">
+          <label style="flex:1;min-width:140px;">⏱️ Repos séries
+            <input type="number" id="editor-rest" value="${restVal}" min="10" max="600" step="5" style="width:70px;margin-left:4px;"> s
+          </label>
+          <label style="flex:1;min-width:140px;">⏱️ Repos exos
+            <input type="number" id="editor-rest-exos" value="${restExosVal}" min="10" max="900" step="5" style="width:70px;margin-left:4px;"> s
+          </label>
+        </div>
         <div id="editor-days">${renderDays()}</div>
         <button class="btn-add-set" onclick="app.editorAddDay()" style="margin-top:8px">+ Ajouter un jour</button>
         <button id="btn-save-program" onclick="app.saveProgram()">💾 Enregistrer</button>
@@ -708,6 +719,10 @@ const app = {
     const p = this.editingProgram;
     p.name = document.getElementById('editor-name').value.trim();
     p.desc = document.getElementById('editor-desc').value.trim();
+    const restEl = document.getElementById('editor-rest');
+    const restExosEl = document.getElementById('editor-rest-exos');
+    if (restEl) p.restTime = parseInt(restEl.value) || 90;
+    if (restExosEl) p.restBetweenExos = parseInt(restExosEl.value) || 180;
     if (!p.name) { alert('Donne un nom au programme'); return; }
     if (!p.days.some(d => d.exercises.some(e => e.name))) { alert('Ajoute au moins un exercice'); return; }
     // Nettoyer les exercices vides
@@ -737,7 +752,7 @@ const app = {
     if (!prog) return;
     this.syncPlanDays(prog);
     const day = prog.days[di];
-    const defaultRest = prog.restRecommended || 90;
+    const defaultRest = prog.restTime || prog.restRecommended || 90;
 
     // Enregistrer le contexte si c'est un plan, pour marquer la complétion à la fin
     if (prog.isPlan) {
@@ -753,7 +768,7 @@ const app = {
       confirmText: 'C\'est parti 🚀',
       onConfirm: (val) => {
         this.restTime = parseInt(val) || defaultRest;
-        this.restBetweenExos = 180;
+        this.restBetweenExos = prog.restBetweenExos || 180;
         this._launchDay(day);
       }
     });
@@ -1695,6 +1710,17 @@ const app = {
     if (el('stats-programs')) el('stats-programs').textContent = this.customPrograms.length;
     const cb = el('setting-bypass-mute');
     if (cb) cb.checked = !!timer.bypassMute;
+    const ageEl = el('settings-age');
+    if (ageEl) ageEl.value = localStorage.getItem('userAge') || '30';
+    const aiKeyEl = el('settings-ai-key');
+    if (aiKeyEl) aiKeyEl.value = this.getAiKey();
+    const aiProvEl = el('settings-ai-provider');
+    if (aiProvEl) aiProvEl.value = this.getAiProvider();
+  },
+
+  setUserAge(val) {
+    const a = parseInt(val);
+    if (a && a >= 14 && a <= 90) localStorage.setItem('userAge', String(a));
   },
 
   toggleBypassMute(enabled) {
@@ -1800,6 +1826,184 @@ const app = {
        <div class="desc-section"><div class="desc-label">🏋️ Quand l'utiliser</div>${d.usage}</div>
        <div class="desc-section"><div class="desc-label">⚠️ Conseil</div>${d.conseil}</div>`;
     document.getElementById('modal-exo-desc').classList.remove('hidden');
+  },
+
+  // ---------- ASSISTANT IA ----------
+  aiMessages: [],
+
+  getAiKey() { return localStorage.getItem('aiApiKey') || ''; },
+  setAiKey(key) { localStorage.setItem('aiApiKey', key.trim()); },
+  getAiProvider() { return localStorage.getItem('aiProvider') || 'openai'; },
+  setAiProvider(p) { localStorage.setItem('aiProvider', p); },
+  clearAiKey() {
+    localStorage.removeItem('aiApiKey');
+    localStorage.removeItem('aiProvider');
+    const el = document.getElementById('settings-ai-key');
+    if (el) el.value = '';
+    this.showModal({ icon: '🗑️', title: 'Clé supprimée', msg: 'La clé API a été supprimée.', confirmText: 'OK', onConfirm: () => {} });
+  },
+
+  async testAiKey() {
+    const key = this.getAiKey();
+    const provider = this.getAiProvider();
+    if (!key) { this.showModal({ icon: '⚠️', title: 'Pas de clé', msg: 'Entre d\'abord ta clé API.', confirmText: 'OK', onConfirm: () => {} }); return; }
+    try {
+      let res;
+      if (provider === 'anthropic') {
+        res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
+          body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 10, messages: [{ role: 'user', content: 'test' }] })
+        });
+      } else {
+        res = await fetch('https://api.openai.com/v1/models', { headers: { 'Authorization': `Bearer ${key}` } });
+      }
+      if (res.ok || res.status === 200) this.showModal({ icon: '✅', title: 'Clé valide !', msg: `Connexion réussie à ${provider === 'anthropic' ? 'Anthropic' : 'OpenAI'}.`, confirmText: 'OK', onConfirm: () => {} });
+      else this.showModal({ icon: '❌', title: 'Clé invalide', msg: `Erreur ${res.status}. Vérifie ta clé.`, confirmText: 'OK', onConfirm: () => {} });
+    } catch (e) {
+      this.showModal({ icon: '❌', title: 'Erreur réseau', msg: e.message, confirmText: 'OK', onConfirm: () => {} });
+    }
+  },
+
+  renderAssistant() {
+    const key = this.getAiKey();
+    const noKey = document.getElementById('assistant-no-key');
+    const chat = document.getElementById('assistant-chat');
+    if (!key) {
+      noKey.classList.remove('hidden');
+      chat.classList.add('hidden');
+    } else {
+      noKey.classList.add('hidden');
+      chat.classList.remove('hidden');
+      this._renderMessages();
+    }
+  },
+
+  _renderMessages() {
+    const container = document.getElementById('assistant-messages');
+    if (!container) return;
+    container.innerHTML = this.aiMessages.map(m => {
+      const cls = m.role === 'user' ? 'ai-msg-user' : 'ai-msg-bot';
+      return `<div class="ai-msg ${cls}">${m.content.replace(/\n/g, '<br>')}</div>`;
+    }).join('');
+    container.scrollTop = container.scrollHeight;
+  },
+
+  sendAssistantMsg() {
+    const input = document.getElementById('assistant-input');
+    const q = input.value.trim();
+    if (!q) return;
+    input.value = '';
+    this.askAssistant(q);
+  },
+
+  async askAssistant(question) {
+    const key = this.getAiKey();
+    if (!key) { this.goTo('settings'); return; }
+    const provider = this.getAiProvider();
+
+    this.aiMessages.push({ role: 'user', content: question });
+    this._renderMessages();
+
+    // Construire le contexte d'entraînement
+    const context = this._buildAiContext();
+    const conversationMsgs = this.aiMessages.filter(m => m.content !== '⏳ …').slice(-10);
+
+    // Afficher "typing"
+    this.aiMessages.push({ role: 'assistant', content: '⏳ …' });
+    this._renderMessages();
+
+    try {
+      let responseText = '';
+
+      if (provider === 'anthropic') {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json',
+            'anthropic-dangerous-direct-browser-access': 'true'
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 800,
+            system: context,
+            messages: conversationMsgs
+          })
+        });
+        const data = await res.json();
+        if (data.content && data.content[0]) {
+          responseText = data.content[0].text;
+        } else if (data.error) {
+          responseText = `❌ Erreur : ${data.error.message}`;
+        }
+      } else {
+        // OpenAI
+        const messages = [
+          { role: 'system', content: context },
+          ...conversationMsgs
+        ];
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages,
+            max_tokens: 800,
+            temperature: 0.7,
+          })
+        });
+        const data = await res.json();
+        if (data.choices && data.choices[0]) {
+          responseText = data.choices[0].message.content;
+        } else if (data.error) {
+          responseText = `❌ Erreur : ${data.error.message}`;
+        }
+      }
+
+      // Remplacer le "typing"
+      this.aiMessages.pop();
+      this.aiMessages.push({ role: 'assistant', content: responseText || '❌ Réponse vide' });
+    } catch (e) {
+      this.aiMessages.pop();
+      this.aiMessages.push({ role: 'assistant', content: `❌ Erreur réseau : ${e.message}` });
+    }
+    this._renderMessages();
+  },
+
+  _buildAiContext() {
+    const age = localStorage.getItem('userAge') || '?';
+    const nbExos = this.exercises.length;
+    const nbSessions = this.history.length;
+
+    // Résumé des 5 dernières séances
+    const lastSessions = this.history.slice(0, 5).map(s => {
+      const d = new Date(s.date).toLocaleDateString('fr-FR');
+      const exos = s.exercises.map(e => {
+        const sets = e.sets.map(st => `${st.kg||'?'}kg×${st.reps||'?'} RPE:${st.feeling||'?'}`).join(', ');
+        return `${e.name}: ${sets}`;
+      }).join(' | ');
+      return `${d}: ${exos}`;
+    }).join('\n');
+
+    // Exercices avec poids par défaut
+    const exoWeights = this.exercises.filter(e => e.defaultKg).map(e => `${e.name}: ${e.defaultKg}kg`).join(', ');
+
+    // Programme en cours
+    const plans = this.customPrograms.filter(p => p.isPlan);
+    const planInfo = plans.length ? `Plan actif : "${plans[0].name}"` : 'Pas de plan 6 mois actif';
+
+    return `Tu es un coach musculation expert, bienveillant et concis. Tu réponds en français.
+L'utilisateur a ${age} ans, ${nbExos} exercices configurés, ${nbSessions} séances enregistrées.
+${planInfo}
+
+Poids de travail actuels : ${exoWeights || 'non renseignés'}
+
+5 dernières séances :
+${lastSessions || 'Aucune séance enregistrée'}
+
+Réponds de manière concise (max 150 mots), pratique et motivante. Si tu proposes des exercices, utilise ceux du catalogue de l'utilisateur. N'invente pas de données que tu n'as pas.`;
   },
 };
 

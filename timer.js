@@ -44,6 +44,20 @@ const timer = {
     };
     document.addEventListener('touchstart', unlock);
     document.addEventListener('click', unlock);
+
+    // Resync quand l'app revient au premier plan (changement d'écran / onglet)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.interval) {
+        // Réveiller l'AudioContext (iOS le suspend en background)
+        if (this.audioCtx && this.audioCtx.state === 'suspended') {
+          this.audioCtx.resume().catch(() => {});
+        }
+        // Recalculer remaining immédiatement
+        this._tick();
+        // Re-planifier les sons restants pour compenser la dérive
+        this._scheduleEvents();
+      }
+    });
   },
 
   setBypassMute(enabled) {

@@ -133,6 +133,7 @@
       <button class="more-item" onclick="app.goTo('guide')">📖 Guide Musculation</button>
       <button class="more-item" onclick="app.goTo('settings')">📦 Sauvegarde & Import</button>
       <button class="more-item" onclick="app.goTo('spotify')">🎵 Musique</button>
+      <button class="more-item" onclick="app.goTo('assistant')">🤖 Assistant IA</button>
     </div>
   </main>
 
@@ -341,6 +342,30 @@
   <main id="view-settings" class="view sub-view">
     <div class="sub-header"><button onclick="app.goTo('more')">◀ Retour</button><h1>📦 Sauvegarde</h1></div>
     <div class="settings-section">
+      <h2>👤 Profil</h2>
+      <p class="settings-desc">Ton âge est utilisé par le générateur 6 mois (temps de repos adapté).</p>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <label for="settings-age">Âge :</label>
+        <input type="number" id="settings-age" min="14" max="90" style="width:70px;padding:8px;border-radius:8px;border:1px solid #333;background:var(--bg);color:var(--text);" onchange="app.setUserAge(this.value)">
+        <span>ans</span>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h2>🤖 Assistant IA (optionnel)</h2>
+      <p class="settings-desc">Active l'assistant en choisissant un fournisseur et en entrant ta clé API. La clé reste sur ton téléphone, jamais envoyée ailleurs qu'au fournisseur choisi.</p>
+      <label class="settings-desc" style="font-weight:600;color:var(--text);">Fournisseur :</label>
+      <select id="settings-ai-provider" style="width:100%;padding:10px;border-radius:8px;border:1px solid #333;background:var(--bg);color:var(--text);font-size:0.9rem;margin-bottom:8px;" onchange="app.setAiProvider(this.value)">
+        <option value="openai">OpenAI (GPT-4o-mini)</option>
+        <option value="anthropic">Anthropic (Claude)</option>
+      </select>
+      <input type="password" id="settings-ai-key" placeholder="sk-... ou sk-ant-..." style="width:100%;padding:10px;border-radius:8px;border:1px solid #333;background:var(--bg);color:var(--text);font-family:monospace;font-size:0.85rem;" onchange="app.setAiKey(this.value)">
+      <div style="margin-top:6px;display:flex;gap:8px;">
+        <button class="settings-btn" style="flex:1;background:var(--card);" onclick="app.testAiKey()">🧪 Tester</button>
+        <button class="settings-btn" style="flex:1;background:var(--card);color:#e94560;" onclick="app.clearAiKey()">🗑️ Supprimer</button>
+      </div>
+      <p class="settings-desc" style="margin-top:6px;font-size:0.78rem;">💡 Clés API : <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--accent);">OpenAI</a> · <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent);">Anthropic</a>. Coût moyen : ~0.01€ par question.</p>
+    </div>
+    <div class="settings-section">
       <h2>📦 Sauvegarde des données</h2>
       <p class="settings-desc">Exporte tes données pour les transférer sur un autre appareil ou faire un backup.</p>
       <button class="settings-btn export" onclick="app.exportData()">📤 Exporter / Partager</button>
@@ -406,6 +431,28 @@
       <div class="spotify-input-row">
         <input type="url" id="spotify-url" placeholder="https://open.spotify.com/playlist/...">
         <button onclick="app.loadSpotifyUrl()">▶️</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- VUE ASSISTANT IA -->
+  <main id="view-assistant" class="view sub-view">
+    <div class="sub-header"><button onclick="app.goTo('more')">◀ Retour</button><h1>🤖 Assistant</h1></div>
+    <div id="assistant-no-key" class="settings-section">
+      <p class="settings-desc">L'assistant IA analyse tes données d'entraînement pour te donner des conseils personnalisés. <strong>Optionnel</strong> — l'app fonctionne parfaitement sans.</p>
+      <p class="settings-desc">Pour l'utiliser, entre ta clé API OpenAI dans <strong>Plus → Sauvegarde → Clé API IA</strong>.</p>
+    </div>
+    <div id="assistant-chat" class="hidden">
+      <div id="assistant-messages"></div>
+      <div id="assistant-suggestions">
+        <button class="assistant-suggestion" onclick="app.askAssistant('Comment évolue ma progression ?')">📊 Ma progression</button>
+        <button class="assistant-suggestion" onclick="app.askAssistant('Quels muscles sont en retard ?')">⚠️ Déséquilibres</button>
+        <button class="assistant-suggestion" onclick="app.askAssistant('Propose-moi une séance de 45 minutes')">⏱️ Séance rapide</button>
+        <button class="assistant-suggestion" onclick="app.askAssistant('Des conseils pour ma prochaine séance ?')">💡 Conseils</button>
+      </div>
+      <div id="assistant-input-row">
+        <input type="text" id="assistant-input" placeholder="Pose ta question..." onkeydown="if(event.key==='Enter')app.sendAssistantMsg()">
+        <button onclick="app.sendAssistantMsg()">➤</button>
       </div>
     </div>
   </main>

@@ -43,18 +43,22 @@ const PLANNER = {
   },
 
   // ---------- Modèles de séance par split ----------
-  buildDayTemplates(split, cat) {
-    const p = (m, n = 1, skip = 0) => this.pickByMuscle(cat, m, n, skip);
+  // Règles : toutes les fibres musculaires couvertes sur la semaine,
+  // abdos intégrés dans chaque séance, durée max ~1h30
+  // mesoOffset : décale le choix d'exercices à chaque mésocycle (rotation)
+  // → Même pattern de muscles, mais exercices différents toutes les 4 semaines
+  buildDayTemplates(split, cat, mesoOffset = 0) {
+    const p = (m, n = 1, skip = 0) => this.pickByMuscle(cat, m, n, skip + mesoOffset);
 
     const fullA = [...p('Jambes', 1), ...p('Pectoraux', 1), ...p('Dos', 1), ...p('Épaules', 1), ...p('Biceps', 1), ...p('Abdos', 1)];
-    const fullB = [...p('Jambes', 1, 1), ...p('Pectoraux', 1, 1), ...p('Dos', 1, 1), ...p('Épaules', 1, 1), ...p('Triceps', 1), ...p('Mollets', 1)];
+    const fullB = [...p('Jambes', 1, 1), ...p('Pectoraux', 1, 1), ...p('Dos', 1, 1), ...p('Épaules', 1, 1), ...p('Triceps', 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)];
 
-    const push = [...p('Pectoraux', 2), ...p('Épaules', 2), ...p('Triceps', 2)];
-    const pull = [...p('Dos', 3), ...p('Biceps', 2)];
+    const push = [...p('Pectoraux', 2), ...p('Épaules', 2), ...p('Triceps', 2), ...p('Abdos', 1)];
+    const pull = [...p('Dos', 3), ...p('Biceps', 2), ...p('Abdos', 1, 1)];
     const legs = [...p('Jambes', 3), ...p('Mollets', 1), ...p('Abdos', 1)];
 
-    const upperA = [...p('Pectoraux', 2), ...p('Dos', 2), ...p('Épaules', 1), ...p('Biceps', 1), ...p('Triceps', 1)];
-    const upperB = [...p('Pectoraux', 2, 1), ...p('Dos', 2, 1), ...p('Épaules', 2, 1), ...p('Biceps', 1, 1), ...p('Triceps', 1, 1)];
+    const upperA = [...p('Pectoraux', 2), ...p('Dos', 2), ...p('Épaules', 1), ...p('Biceps', 1), ...p('Triceps', 1), ...p('Abdos', 1)];
+    const upperB = [...p('Pectoraux', 2, 1), ...p('Dos', 2, 1), ...p('Épaules', 2, 1), ...p('Biceps', 1, 1), ...p('Triceps', 1, 1), ...p('Abdos', 1, 1)];
     const lowerA = [...p('Jambes', 3), ...p('Mollets', 1), ...p('Abdos', 1)];
     const lowerB = [...p('Jambes', 3, 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)];
 
@@ -71,8 +75,8 @@ const PLANNER = {
     ];
     if (split === 'ppl_x2') return [
       { name: '💪 Push A', exos: push }, { name: '🔙 Pull A', exos: pull }, { name: '🦵 Legs A', exos: legs },
-      { name: '💪 Push B', exos: [...p('Pectoraux', 2, 1), ...p('Épaules', 2, 1), ...p('Triceps', 2, 1)] },
-      { name: '🔙 Pull B', exos: [...p('Dos', 3, 1), ...p('Biceps', 2, 1)] },
+      { name: '💪 Push B', exos: [...p('Pectoraux', 2, 1), ...p('Épaules', 2, 1), ...p('Triceps', 2, 1), ...p('Abdos', 1)] },
+      { name: '🔙 Pull B', exos: [...p('Dos', 3, 1), ...p('Biceps', 2, 1), ...p('Abdos', 1, 1)] },
       { name: '🦵 Legs B', exos: [...p('Jambes', 3, 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)] }
     ];
     return [{ name: 'Séance', exos: fullA }];
@@ -167,12 +171,13 @@ const PLANNER = {
     }
 
     const split = this.pickSplit(frequency, level);
-    const dayTemplates = this.buildDayTemplates(split, cat);
     const ageMod = this.ageModifier(age);
     const periodization = this.goalPeriodization(goal);
 
-    // Vérifier que chaque jour a au moins 4 exos (sinon rebalance)
-    dayTemplates.forEach(d => { d.exos = d.exos.filter(Boolean); });
+    // Limiter la durée à ~1h30 max par séance
+    // Estimation : (sets × reps-time + repos) ≈ 2 min/série en moyenne
+    // → Séance max = 90 min / 2 = 45 séries totales
+    const MAX_TOTAL_SETS = 45;
 
     const weeks = [];
     for (let w = 0; w < 26; w++) {
@@ -191,6 +196,13 @@ const PLANNER = {
       const meso = periodization[mesoIdx];
       const phaseLabel = isFinal ? 'Bilan & retest' : meso.phase + (deload ? ' (Deload)' : '');
 
+      // Rotation des exercices : on utilise mesoIdx comme offset (skip)
+      // → Chaque mésocycle utilise des exercices différents du catalogue
+      const dayTemplates = this.buildDayTemplates(split, cat, mesoIdx);
+
+      // Vérifier que chaque jour a au moins 4 exos
+      dayTemplates.forEach(d => { d.exos = d.exos.filter(Boolean); });
+
       // Volume modulé : semaine 1 base, semaine 2 +1 série, semaine 3 +2 séries, semaine 4 deload (si applicable)
       let setsAdj = meso.sets;
       if (!deload && !isFinal) {
@@ -206,20 +218,25 @@ const PLANNER = {
       const rpe = Math.min(meso.rpe, ageMod.intensityCap) - (deload ? 1 : 0);
       const useTech = !!meso.tech && !deload && !isFinal;
 
-      const days = dayTemplates.map(t => ({
-        name: t.name,
-        exercises: t.exos.map((name, idx) => {
-          const isLastTwo = idx >= t.exos.length - 2;
-          const tech = useTech && isLastTwo ? this.pickTechnique(name) : '';
-          return {
-            name,
-            sets: setsAdj,
-            reps: deload ? this.softReps(meso.reps) : meso.reps,
-            kg: 0,
-            lastSetTechnique: tech
-          };
-        })
-      }));
+      const days = dayTemplates.map(t => {
+        // Limiter le nombre d'exercices pour rester ≤ MAX_TOTAL_SETS séries
+        const maxExos = Math.min(t.exos.length, Math.floor(MAX_TOTAL_SETS / setsAdj));
+        const exos = t.exos.slice(0, maxExos);
+        return {
+          name: t.name,
+          exercises: exos.map((name, idx) => {
+            const isLastTwo = idx >= exos.length - 2;
+            const tech = useTech && isLastTwo ? this.pickTechnique(name) : '';
+            return {
+              name,
+              sets: setsAdj,
+              reps: deload ? this.softReps(meso.reps) : meso.reps,
+              kg: 0,
+              lastSetTechnique: tech
+            };
+          })
+        };
+      });
 
       weeks.push({ weekNum: w + 1, mesoIdx, phase: phaseLabel, deload: !!deload || !!isFinal, rpe, days });
     }
@@ -305,6 +322,11 @@ const PLANNER = {
     return ({ beginner: 'débutant', intermediate: 'intermédiaire', advanced: 'avancé' })[l] || l;
   },
 };
+
+
+
+
+
 
 
 
