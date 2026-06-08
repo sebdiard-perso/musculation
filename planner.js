@@ -46,24 +46,25 @@ const PLANNER = {
   // Règles : toutes les fibres musculaires couvertes sur la semaine,
   // abdos intégrés dans chaque séance, durée max ~1h30
   // mesoOffset : décale le choix d'exercices à chaque mésocycle (rotation)
-  // → Même pattern de muscles, mais exercices différents toutes les 4 semaines
-  buildDayTemplates(split, cat, mesoOffset = 0) {
+  // ageMod : adaptations genre/âge (lowerBodyEmphasis pour femmes)
+  buildDayTemplates(split, cat, mesoOffset = 0, ageMod = {}) {
     const p = (m, n = 1, skip = 0) => this.pickByMuscle(cat, m, n, skip + mesoOffset);
+    const lb = ageMod.lowerBodyEmphasis; // Femmes : +1 exo jambes/fessiers
 
-    const fullA = [...p('Jambes', 1), ...p('Pectoraux', 1), ...p('Dos', 1), ...p('Épaules', 1), ...p('Biceps', 1), ...p('Abdos', 1)];
-    const fullB = [...p('Jambes', 1, 1), ...p('Pectoraux', 1, 1), ...p('Dos', 1, 1), ...p('Épaules', 1, 1), ...p('Triceps', 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)];
+    const fullA = [...p('Jambes', lb ? 2 : 1), ...p('Pectoraux', 1), ...p('Dos', 1), ...p('Épaules', 1), ...(lb ? [] : p('Biceps', 1)), ...p('Abdos', 1)];
+    const fullB = [...p('Jambes', lb ? 2 : 1, 1), ...p('Pectoraux', 1, 1), ...p('Dos', 1, 1), ...p('Épaules', 1, 1), ...p('Triceps', 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)];
 
     const push = [...p('Pectoraux', 2), ...p('Épaules', 2), ...p('Triceps', 2), ...p('Abdos', 1)];
     const pull = [...p('Dos', 3), ...p('Biceps', 2), ...p('Abdos', 1, 1)];
-    const legs = [...p('Jambes', 3), ...p('Mollets', 1), ...p('Abdos', 1)];
+    const legs = [...p('Jambes', lb ? 4 : 3), ...p('Mollets', 1), ...p('Abdos', 1)];
 
     const upperA = [...p('Pectoraux', 2), ...p('Dos', 2), ...p('Épaules', 1), ...p('Biceps', 1), ...p('Triceps', 1), ...p('Abdos', 1)];
     const upperB = [...p('Pectoraux', 2, 1), ...p('Dos', 2, 1), ...p('Épaules', 2, 1), ...p('Biceps', 1, 1), ...p('Triceps', 1, 1), ...p('Abdos', 1, 1)];
-    const lowerA = [...p('Jambes', 3), ...p('Mollets', 1), ...p('Abdos', 1)];
-    const lowerB = [...p('Jambes', 3, 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)];
+    const lowerA = [...p('Jambes', lb ? 4 : 3), ...p('Mollets', 1), ...p('Abdos', 1)];
+    const lowerB = [...p('Jambes', lb ? 4 : 3, 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)];
 
     if (split === 'fullbody2') return [{ name: '🏋️ Full Body A', exos: fullA }, { name: '🏋️ Full Body B', exos: fullB }];
-    if (split === 'fullbody3') return [{ name: '🏋️ Full A', exos: fullA }, { name: '🏋️ Full B', exos: fullB }, { name: '🏋️ Full C', exos: [...p('Jambes',1,2),...p('Pectoraux',1),...p('Dos',1),...p('Épaules',1,1),...p('Triceps',1),...p('Abdos',1)] }];
+    if (split === 'fullbody3') return [{ name: '🏋️ Full A', exos: fullA }, { name: '🏋️ Full B', exos: fullB }, { name: '🏋️ Full C', exos: [...p('Jambes',lb?2:1,2),...p('Pectoraux',1),...p('Dos',1),...p('Épaules',1,1),...p('Triceps',1),...p('Abdos',1)] }];
     if (split === 'ppl') return [{ name: '💪 Push', exos: push }, { name: '🔙 Pull', exos: pull }, { name: '🦵 Legs', exos: legs }];
     if (split === 'upper_lower') return [
       { name: '⬆️ Upper A', exos: upperA }, { name: '⬇️ Lower A', exos: lowerA },
@@ -77,7 +78,7 @@ const PLANNER = {
       { name: '💪 Push A', exos: push }, { name: '🔙 Pull A', exos: pull }, { name: '🦵 Legs A', exos: legs },
       { name: '💪 Push B', exos: [...p('Pectoraux', 2, 1), ...p('Épaules', 2, 1), ...p('Triceps', 2, 1), ...p('Abdos', 1)] },
       { name: '🔙 Pull B', exos: [...p('Dos', 3, 1), ...p('Biceps', 2, 1), ...p('Abdos', 1, 1)] },
-      { name: '🦵 Legs B', exos: [...p('Jambes', 3, 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)] }
+      { name: '🦵 Legs B', exos: [...p('Jambes', lb ? 4 : 3, 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)] }
     ];
     return [{ name: 'Séance', exos: fullA }];
   },
@@ -138,13 +139,39 @@ const PLANNER = {
     return G[goal] || G.masse;
   },
 
-  // ---------- Modificateur d'âge ----------
-  ageModifier(age) {
-    if (age < 18)   return { volumeFactor: 0.85, intensityCap: 8,  restAdd: 0,  note: 'Adolescent : technique avant la charge, jamais de 1RM.' };
-    if (age <= 35)  return { volumeFactor: 1.00, intensityCap: 10, restAdd: 0,  note: '' };
-    if (age <= 50)  return { volumeFactor: 0.95, intensityCap: 9,  restAdd: 15, note: 'Échauffement renforcé, contrôle excentrique.' };
-    if (age <= 65)  return { volumeFactor: 0.85, intensityCap: 8,  restAdd: 30, note: 'Charges modérées, amplitude complète, repos prolongés.' };
-    return            { volumeFactor: 0.75, intensityCap: 7,  restAdd: 45, note: 'Priorité mobilité, articulations, récupération.' };
+  // ---------- Modificateur d'âge & genre ----------
+  // Prend en compte les spécificités hormonales :
+  // - Femme 45+ : périménopause/ménopause → perte osseuse, sarcopénie accélérée
+  //   → Plus de travail en charge (ostéoprotection), repos allongés, récupération+++
+  // - Femme < 45 : récupération légèrement plus rapide, moins de fatigue SNC
+  ageModifier(age, gender) {
+    const g = gender || 'male';
+    // Base par âge (applicable à tous)
+    let mod;
+    if (age < 18)       mod = { volumeFactor: 0.85, intensityCap: 8,  restAdd: 0,  note: 'Adolescent : technique avant la charge, jamais de 1RM.' };
+    else if (age <= 35) mod = { volumeFactor: 1.00, intensityCap: 10, restAdd: 0,  note: '' };
+    else if (age <= 50) mod = { volumeFactor: 0.95, intensityCap: 9,  restAdd: 15, note: 'Échauffement renforcé, contrôle excentrique.' };
+    else if (age <= 65) mod = { volumeFactor: 0.85, intensityCap: 8,  restAdd: 30, note: 'Charges modérées, amplitude complète, repos prolongés.' };
+    else                mod = { volumeFactor: 0.75, intensityCap: 7,  restAdd: 45, note: 'Priorité mobilité, articulations, récupération.' };
+
+    // Adaptations spécifiques genre féminin
+    if (g === 'female') {
+      mod.gender = 'female';
+      if (age >= 45) {
+        // Ménopause / périménopause : adaptations importantes
+        mod.restAdd += 15; // récupération plus longue
+        mod.volumeFactor = Math.max(0.70, mod.volumeFactor - 0.05);
+        mod.note = (mod.note ? mod.note + ' ' : '') +
+          '🦴 Ménopause : priorité charges lourdes (ostéoprotection), exercices portés, récupération allongée, travail d\'équilibre.';
+        mod.menopause = true;
+      } else {
+        mod.note = (mod.note ? mod.note + ' ' : '') +
+          'Femme : récupération SNC plus rapide, bien pour le volume. Fessiers/ischio renforcés.';
+      }
+      // Femmes : privilégier un peu plus le bas du corps / fessiers
+      mod.lowerBodyEmphasis = true;
+    }
+    return mod;
   },
 
   // ---------- Choix de la technique d'intensification cohérente ----------
@@ -163,7 +190,7 @@ const PLANNER = {
 
   // ---------- Génération ----------
   generate(params) {
-    const { age, goal, level, equipment, frequency } = params;
+    const { age, gender, goal, level, equipment, frequency } = params;
 
     const cat = this.filterByEquipment(this.catalog(), equipment);
     if (cat.length < 6) {
@@ -171,7 +198,7 @@ const PLANNER = {
     }
 
     const split = this.pickSplit(frequency, level);
-    const ageMod = this.ageModifier(age);
+    const ageMod = this.ageModifier(age, gender);
     const periodization = this.goalPeriodization(goal);
 
     // Limiter la durée à ~1h30 max par séance
@@ -198,7 +225,7 @@ const PLANNER = {
 
       // Rotation des exercices : on utilise mesoIdx comme offset (skip)
       // → Chaque mésocycle utilise des exercices différents du catalogue
-      const dayTemplates = this.buildDayTemplates(split, cat, mesoIdx);
+      const dayTemplates = this.buildDayTemplates(split, cat, mesoIdx, ageMod);
 
       // Vérifier que chaque jour a au moins 4 exos
       dayTemplates.forEach(d => { d.exos = d.exos.filter(Boolean); });
@@ -220,8 +247,21 @@ const PLANNER = {
 
       const days = dayTemplates.map(t => {
         // Limiter le nombre d'exercices pour rester ≤ MAX_TOTAL_SETS séries
-        const maxExos = Math.min(t.exos.length, Math.floor(MAX_TOTAL_SETS / setsAdj));
-        const exos = t.exos.slice(0, maxExos);
+        const maxExos = Math.floor(MAX_TOTAL_SETS / setsAdj);
+        let exos = t.exos;
+        if (exos.length > maxExos) {
+          // Séparer les abdos (toujours les garder) des autres
+          const abdos = exos.filter(name => {
+            const n = name.toLowerCase();
+            return n.includes('crunch') || n.includes('relevé') || n.includes('releve');
+          });
+          const nonAbdos = exos.filter(name => {
+            const n = name.toLowerCase();
+            return !n.includes('crunch') && !n.includes('relevé') && !n.includes('releve');
+          });
+          // Tronquer les non-abdos puis rajouter les abdos
+          exos = nonAbdos.slice(0, maxExos - abdos.length).concat(abdos);
+        }
         return {
           name: t.name,
           exercises: exos.map((name, idx) => {
@@ -249,7 +289,7 @@ const PLANNER = {
       id: 'plan_' + Date.now(),
       isPlan: true,
       name: `🧠 Plan 6 mois — ${goalLabel}`,
-      desc: `${frequency}j/sem · ${eqLabel} · ${age} ans · niveau ${this.levelLabel(level)}${ageMod.note ? ' · ' + ageMod.note : ''}`,
+      desc: `${frequency}j/sem · ${eqLabel} · ${gender === 'female' ? '♀' : '♂'} ${age} ans · niveau ${this.levelLabel(level)}${ageMod.note ? ' · ' + ageMod.note : ''}`,
       params,
       ageMod,
       startDate,
@@ -322,6 +362,13 @@ const PLANNER = {
     return ({ beginner: 'débutant', intermediate: 'intermédiaire', advanced: 'avancé' })[l] || l;
   },
 };
+
+
+
+
+
+
+
 
 
 

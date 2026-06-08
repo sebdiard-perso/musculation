@@ -525,6 +525,12 @@ const app = {
         <label class="planner-label">🎂 Ton âge</label>
         <input type="number" id="plan-age" min="14" max="90" value="${localStorage.getItem('userAge') || '30'}" inputmode="numeric">
 
+        <label class="planner-label">⚧️ Genre</label>
+        <select id="plan-gender">
+          <option value="male" ${localStorage.getItem('userGender') === 'male' ? 'selected' : ''}>Homme</option>
+          <option value="female" ${localStorage.getItem('userGender') === 'female' ? 'selected' : ''}>Femme</option>
+        </select>
+
         <label class="planner-label">🎯 Ton objectif</label>
         <select id="plan-goal">
           <option value="masse">💪 Prise de masse / hypertrophie</option>
@@ -567,12 +573,15 @@ const app = {
 
   createPlanFromForm() {
     const age = parseInt(document.getElementById('plan-age').value) || 30;
+    const gender = document.getElementById('plan-gender').value;
     const goal = document.getElementById('plan-goal').value;
     const level = document.getElementById('plan-level').value;
     const equipment = document.getElementById('plan-equipment').value;
     const frequency = parseInt(document.getElementById('plan-frequency').value) || 4;
+    // Sauvegarder le genre pour le pré-remplir la prochaine fois
+    localStorage.setItem('userGender', gender);
 
-    const result = PLANNER.generate({ age, goal, level, equipment, frequency });
+    const result = PLANNER.generate({ age, gender, goal, level, equipment, frequency });
     if (result.error) {
       this.showModal({ icon: '⚠️', title: 'Impossible', msg: result.error, confirmText: 'OK', onConfirm: () => {} });
       return;
