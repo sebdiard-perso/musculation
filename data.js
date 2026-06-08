@@ -58,6 +58,9 @@ const DATA = {
     'Fentes bulgares haltères': { muscles: 'Quadriceps, fessiers, ischio-jambiers', exec: 'Pied arrière sur le banc, haltères le long du corps. Descendre le genou arrière vers le sol. Garder le buste droit. Plus efficace que les fentes classiques pour les fessiers.' },
     'Crunch': { muscles: 'Grand droit de l\'abdomen', exec: 'Allongé, genoux fléchis, mains derrière la tête. Enrouler le buste en décollant les épaules. Ne pas tirer sur la nuque. Expirer en montant, contrôler la descente.' },
     'Relevé de jambes couché': { muscles: 'Abdominaux inférieurs, psoas', exec: 'Allongé sur le banc ou au sol. Monter les jambes tendues jusqu\'à la verticale. Descendre lentement sans toucher le sol. Garder le bas du dos plaqué.' },
+    'Crunch inversé': { muscles: 'Abdominaux inférieurs', exec: 'Allongé, genoux fléchis. Enrouler le bassin vers le haut en soulevant les fesses du sol. Contracter les abdos bas. Redescendre lentement sans élan.' },
+    'Gainage planche': { muscles: 'Grand droit, transverse, obliques', exec: 'En appui sur les avant-bras et les pointes de pieds. Corps aligné de la tête aux talons. Serrer les abdos et les fessiers. Ne pas cambrer ni relever les fesses. Tenir le temps indiqué.' },
+    'Mountain climber': { muscles: 'Abdominaux, psoas, cardio', exec: 'Position de pompe, bras tendus. Ramener un genou vers la poitrine en alternance, rapidement. Garder le dos plat et le gainage constant. Rythme soutenu.' },
   },
 
   defaultExercises: [
@@ -85,6 +88,9 @@ const DATA = {
     { id: 22, name: 'Mollets debout barre', muscle: 'Mollets', video: 'https://www.youtube.com/watch?v=gwLzBJYoWlI', mode: 'barbell' },
     { id: 23, name: 'Crunch', muscle: 'Abdos', video: 'https://www.youtube.com/watch?v=Xyd_fa5zoEU', mode: 'bilateral' },
     { id: 24, name: 'Relevé de jambes couché', muscle: 'Abdos', video: 'https://www.youtube.com/watch?v=JB2oyawG9KI', mode: 'bilateral' },
+    { id: 29, name: 'Crunch inversé', muscle: 'Abdos', video: 'https://www.youtube.com/watch?v=hyv14e2QDq0', mode: 'bilateral' },
+    { id: 30, name: 'Gainage planche', muscle: 'Abdos', video: 'https://www.youtube.com/watch?v=ASdvN_XEl_c', mode: 'bilateral' },
+    { id: 31, name: 'Mountain climber', muscle: 'Abdos', video: 'https://www.youtube.com/watch?v=nmwgirgXLYM', mode: 'bilateral' },
     { id: 25, name: 'Développé couché haltères', muscle: 'Pectoraux', video: 'https://www.youtube.com/watch?v=VmB1G1K7v94' },
     { id: 26, name: 'Développé épaules haltères assis', muscle: 'Épaules', video: 'https://www.youtube.com/watch?v=qEwKCR5JCog' },
     { id: 27, name: 'Mollets debout haltère', muscle: 'Mollets', video: 'https://www.youtube.com/watch?v=gwLzBJYoWlI' },
