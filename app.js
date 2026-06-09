@@ -399,6 +399,8 @@ const app = {
   // PROGRAMS
   syncPlanDays(p) {
     if (!p || !p.isPlan || !p.weeks) return p;
+    // Mettre à jour les semaines restantes avec la nouvelle logique du planner
+    this._upgradePlanWeeks(p);
     const idx = PLANNER.currentWeekIdx(p);
     p.currentWeekIdx = idx;
     const w = p.weeks[idx];
@@ -408,11 +410,39 @@ const app = {
       exercises: d.exercises.map(ex => {
         const userExo = this.exercises.find(e => e.name === ex.name);
         const baseKg = userExo?.defaultKg || 0;
-        const targetKg = PLANNER.computeTargetKg(baseKg, ex.reps, w.deload);
+        const targetKg = PLANNER.computeTargetKg(baseKg, ex.reps, w.deload, w.rpe);
         return { ...ex, kg: targetKg, targetRpe: w.rpe, deload: w.deload };
       })
     }));
     return p;
+  },
+
+  // Régénère les semaines futures du plan en gardant la progression
+  _upgradePlanWeeks(p) {
+    if (!p.isPlan || !p.params || !p.weeks) return;
+    // Ne régénérer qu'une fois par version
+    if (p._planVersion >= 34) return;
+    const idx = PLANNER.currentWeekIdx(p);
+    const params = p.params;
+    const newResult = PLANNER.generate(params);
+    if (newResult.error || !newResult.plan) return;
+    // Remplacer les semaines futures par les nouvelles (plus complètes)
+    for (let w = idx; w < 26 && w < newResult.plan.weeks.length; w++) {
+      p.weeks[w] = newResult.plan.weeks[w];
+    }
+    // Mettre à jour le repos recommandé
+    p.restRecommended = newResult.plan.restRecommended;
+    p._planVersion = 34;
+    // S'assurer que les nouveaux exos existent dans le catalogue utilisateur
+    const known = new Set(this.exercises.map(e => e.name));
+    p.weeks.forEach(w => w.days.forEach(d => d.exercises.forEach(ex => {
+      if (!known.has(ex.name)) {
+        const def = DATA.defaultExercises.find(de => de.name === ex.name);
+        if (def) { this.exercises.push(JSON.parse(JSON.stringify(def))); known.add(ex.name); }
+      }
+    })));
+    this.saveExercises();
+    this.saveCustomPrograms();
   },
 
   renderPrograms() {
@@ -787,12 +817,32 @@ const app = {
     this.currentWorkout = day.exercises.map(pe => {
       const exo = this.exercises.find(e => e.name === pe.name);
       const sug = this.getSuggestedWeight(pe.name);
-      const kg = pe.kg || (sug ? sug.kg : (exo?.defaultKg || ''));
+      let kg = pe.kg || (sug ? sug.kg : (exo?.defaultKg || ''));
+
+      // Ajuster le poids selon le RPE cible vs RPE de la dernière séance
+      // Si la dernière séance était plus intense (RPE plus élevé), réduire le poids
+      // Si elle était moins intense, augmenter légèrement
+      if (kg && pe.targetRpe) {
+        const lastPerf = this.getLastPerformance(pe.name);
+        const lastRpe = lastPerf ? parseInt(lastPerf.feeling) || 8 : 8;
+        const targetRpe = parseInt(pe.targetRpe) || 8;
+        const rpeDiff = targetRpe - lastRpe; // négatif = on veut plus léger
+        if (rpeDiff !== 0) {
+          // ~2.5-5% par point de RPE de différence
+          const factor = 1 + (rpeDiff * 0.04); // +/-4% par point de RPE
+          kg = Math.max(0, Math.round(parseFloat(kg) * factor * 2) / 2); // arrondi au demi-kg
+        }
+      }
+
+      // En deload, réduire de 20% supplémentaire
+      if (pe.deload && kg && !pe.kg) {
+        kg = Math.max(0, Math.round(parseFloat(kg) * 0.80 * 2) / 2);
+      }
+
       const defaultReps = pe.reps.includes('-') ? pe.reps.split('-')[1] : pe.reps.replace(/\/jambe/, '');
       const sets = [];
       for (let i = 0; i < pe.sets; i++) {
         const isLast = i === pe.sets - 1;
-        // Utiliser les reps de la dernière séance si disponibles
         const savedReps = exo?.lastReps?.[i] || defaultReps;
         sets.push({ kg, reps: (isLast && pe.lastSetTechnique === '21') ? '21' : savedReps, feeling: '',
           technique: (isLast && pe.lastSetTechnique) ? pe.lastSetTechnique : '' });
@@ -873,7 +923,7 @@ const app = {
             oninput="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].reps=this.value">
         </div>
       </div>
-
+      ${this._getExoTips(exo.name)}
     `;
 
     // Bouton suivant
@@ -885,6 +935,12 @@ const app = {
     else if (isLastSet) btnText = 'Exercice suivant ▶ (3min)';
     else btnText = 'Série suivante ▶';
     document.getElementById('guided-next').textContent = btnText;
+  },
+
+  _getExoTips(name) {
+    const desc = DATA.descriptions[name];
+    if (!desc || !desc.tips) return '';
+    return `<div class="guided-tips">${desc.tips.split(' · ').map(t => `<span class="guided-tip">${t}</span>`).join('')}</div>`;
   },
 
   guidedSetFeeling(rpe) {

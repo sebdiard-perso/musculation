@@ -209,7 +209,7 @@ const timer = {
     const ctxNow = this.audioCtx ? this.audioCtx.currentTime : 0;
 
     // Bips à remaining = 4, 3, 2, 1 → offset = N-4, N-3, N-2, N-1 (en secondes)
-    for (let r = Math.min(4, N - 1); r >= 1; r--) {
+    for (let r = Math.min(5, N - 1); r >= 1; r--) {
       const offsetSec = N - r;
       if (offsetSec <= 0) continue;
       this._scheduleBeep(offsetSec, useWebAudio, ctxNow);

@@ -56,12 +56,12 @@ const PLANNER = {
 
     const push = [...p('Pectoraux', 2), ...p('Épaules', 2), ...p('Triceps', 2), ...p('Abdos', 1)];
     const pull = [...p('Dos', 3), ...p('Biceps', 2), ...p('Abdos', 1, 1)];
-    const legs = [...p('Jambes', lb ? 4 : 3), ...p('Mollets', 1), ...p('Abdos', 1)];
+    const legs = [...p('Jambes', lb ? 4 : 3), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1), ...p('Abdos', 1, 1)];
 
     const upperA = [...p('Pectoraux', 2), ...p('Dos', 2), ...p('Épaules', 1), ...p('Biceps', 1), ...p('Triceps', 1), ...p('Abdos', 1)];
     const upperB = [...p('Pectoraux', 2, 1), ...p('Dos', 2, 1), ...p('Épaules', 2, 1), ...p('Biceps', 1, 1), ...p('Triceps', 1, 1), ...p('Abdos', 1, 1)];
-    const lowerA = [...p('Jambes', lb ? 4 : 3), ...p('Mollets', 1), ...p('Abdos', 1)];
-    const lowerB = [...p('Jambes', lb ? 4 : 3, 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)];
+    const lowerA = [...p('Jambes', lb ? 4 : 3), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1), ...p('Abdos', 1, 1)];
+    const lowerB = [...p('Jambes', lb ? 4 : 3, 1), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1, 1), ...p('Abdos', 1, 2)];
 
     if (split === 'fullbody2') return [{ name: '🏋️ Full Body A', exos: fullA }, { name: '🏋️ Full Body B', exos: fullB }];
     if (split === 'fullbody3') return [{ name: '🏋️ Full A', exos: fullA }, { name: '🏋️ Full B', exos: fullB }, { name: '🏋️ Full C', exos: [...p('Jambes',lb?2:1,2),...p('Pectoraux',1),...p('Dos',1),...p('Épaules',1,1),...p('Triceps',1),...p('Abdos',1)] }];
@@ -201,9 +201,10 @@ const PLANNER = {
     const ageMod = this.ageModifier(age, gender);
     const periodization = this.goalPeriodization(goal);
 
-    // Limiter la durée à ~1h30 max par séance
-    // Estimation : (sets × reps-time + repos) ≈ 2 min/série en moyenne
-    // → Séance max = 90 min / 2 = 45 séries totales
+    // Durée cible : 1h min — 1h30 max par séance
+    // Estimation : ~2 min par série (effort + repos)
+    // → Min = 60 min / 2 = 30 séries, Max = 90 min / 2 = 45 séries
+    const MIN_TOTAL_SETS = 30;
     const MAX_TOTAL_SETS = 45;
 
     const weeks = [];
@@ -246,22 +247,40 @@ const PLANNER = {
       const useTech = !!meso.tech && !deload && !isFinal;
 
       const days = dayTemplates.map(t => {
-        // Limiter le nombre d'exercices pour rester ≤ MAX_TOTAL_SETS séries
+        // Calculer le nombre d'exos pour rester entre MIN et MAX séries totales
         const maxExos = Math.floor(MAX_TOTAL_SETS / setsAdj);
+        const minExos = Math.ceil(MIN_TOTAL_SETS / setsAdj);
         let exos = t.exos;
+
         if (exos.length > maxExos) {
-          // Séparer les abdos (toujours les garder) des autres
+          // Trop d'exos → tronquer en protégeant les abdos
           const abdos = exos.filter(name => {
             const n = name.toLowerCase();
-            return n.includes('crunch') || n.includes('relevé') || n.includes('releve');
+            return n.includes('crunch') || n.includes('relevé') || n.includes('releve') || n.includes('gainage') || n.includes('mountain');
           });
           const nonAbdos = exos.filter(name => {
             const n = name.toLowerCase();
-            return !n.includes('crunch') && !n.includes('relevé') && !n.includes('releve');
+            return !n.includes('crunch') && !n.includes('relevé') && !n.includes('releve') && !n.includes('gainage') && !n.includes('mountain');
           });
-          // Tronquer les non-abdos puis rajouter les abdos
           exos = nonAbdos.slice(0, maxExos - abdos.length).concat(abdos);
+        } else if (exos.length < minExos) {
+          // Pas assez d'exos → en ajouter depuis le catalogue (même muscles, variantes)
+          const existing = new Set(exos);
+          const muscles = [...new Set(exos.map(name => {
+            const e = cat.find(c => c.name === name);
+            return e ? e.muscle : '';
+          }).filter(Boolean))];
+          for (const m of muscles) {
+            if (exos.length >= minExos) break;
+            const extras = cat.filter(c => c.muscle === m && !existing.has(c.name));
+            for (const ex of extras) {
+              if (exos.length >= minExos) break;
+              exos.push(ex.name);
+              existing.add(ex.name);
+            }
+          }
         }
+
         return {
           name: t.name,
           exercises: exos.map((name, idx) => {
@@ -313,8 +332,8 @@ const PLANNER = {
   },
 
   // ---------- Calcul du poids cible par rapport au defaultKg utilisateur ----------
-  // defaultKg est supposé être le poids de travail "8-10 reps" (~75% 1RM).
-  // On déduit un facteur d'ajustement selon la plage de reps de la semaine.
+  // defaultKg est supposé être le poids de travail "8-10 reps" à RPE 8 (~75% 1RM).
+  // On ajuste selon : plage de reps, deload, et RPE cible de la semaine.
   repFactor(reps) {
     if (!reps) return 0.72;
     if (reps === '21') return 0.45;
@@ -329,12 +348,19 @@ const PLANNER = {
     return 0.55;
   },
 
-  // Calcule le poids cible pour un exercice donné en fonction du defaultKg
-  // de l'utilisateur, des reps de la semaine et de l'état deload.
-  computeTargetKg(defaultKg, reps, deload) {
+  // Facteur d'ajustement RPE : le defaultKg correspond à RPE 8.
+  // Si le RPE cible est différent, on ajuste (~4% par point de RPE)
+  rpeFactor(targetRpe) {
+    if (!targetRpe) return 1;
+    const diff = targetRpe - 8; // RPE 8 = référence
+    return 1 + (diff * 0.04); // +4% par point au-dessus, -4% en dessous
+  },
+
+  computeTargetKg(defaultKg, reps, deload, targetRpe) {
     if (!defaultKg) return 0;
     const ratio = this.repFactor(reps) / 0.75; // 8-10 reps comme référence
-    const factor = ratio * (deload ? 0.80 : 1);
+    const rpeAdj = this.rpeFactor(targetRpe);
+    const factor = ratio * rpeAdj * (deload ? 0.80 : 1);
     // Arrondi au demi-kilo le plus proche
     return Math.max(0, Math.round(defaultKg * factor * 2) / 2);
   },
@@ -362,6 +388,12 @@ const PLANNER = {
     return ({ beginner: 'débutant', intermediate: 'intermédiaire', advanced: 'avancé' })[l] || l;
   },
 };
+
+
+
+
+
+
 
 
 
