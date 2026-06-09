@@ -51,20 +51,23 @@ const PLANNER = {
     const p = (m, n = 1, skip = 0) => this.pickByMuscle(cat, m, n, skip + mesoOffset);
     const lb = ageMod.lowerBodyEmphasis; // Femmes : +1 exo jambes/fessiers
 
-    const fullA = [...p('Jambes', lb ? 2 : 1), ...p('Pectoraux', 1), ...p('Dos', 1), ...p('Épaules', 1), ...(lb ? [] : p('Biceps', 1)), ...p('Abdos', 1)];
-    const fullB = [...p('Jambes', lb ? 2 : 1, 1), ...p('Pectoraux', 1, 1), ...p('Dos', 1, 1), ...p('Épaules', 1, 1), ...p('Triceps', 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)];
+    // Dédoublonnage : supprime les exercices en double dans un template
+    const dedup = (arr) => [...new Set(arr)];
 
-    const push = [...p('Pectoraux', 2), ...p('Épaules', 2), ...p('Triceps', 2), ...p('Abdos', 1)];
-    const pull = [...p('Dos', 3), ...p('Biceps', 2), ...p('Abdos', 1, 1)];
-    const legs = [...p('Jambes', lb ? 4 : 3), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1), ...p('Abdos', 1, 1)];
+    const fullA = dedup([...p('Jambes', lb ? 2 : 1), ...p('Pectoraux', 1), ...p('Dos', 1), ...p('Épaules', 1), ...(lb ? [] : p('Biceps', 1)), ...p('Abdos', 1)]);
+    const fullB = dedup([...p('Jambes', lb ? 2 : 1, 1), ...p('Pectoraux', 1, 1), ...p('Dos', 1, 1), ...p('Épaules', 1, 1), ...p('Triceps', 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)]);
 
-    const upperA = [...p('Pectoraux', 2), ...p('Dos', 2), ...p('Épaules', 1), ...p('Biceps', 1), ...p('Triceps', 1), ...p('Abdos', 1)];
-    const upperB = [...p('Pectoraux', 2, 1), ...p('Dos', 2, 1), ...p('Épaules', 2, 1), ...p('Biceps', 1, 1), ...p('Triceps', 1, 1), ...p('Abdos', 1, 1)];
-    const lowerA = [...p('Jambes', lb ? 4 : 3), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1), ...p('Abdos', 1, 1)];
-    const lowerB = [...p('Jambes', lb ? 4 : 3, 1), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1, 1), ...p('Abdos', 1, 2)];
+    const push = dedup([...p('Pectoraux', 2), ...p('Épaules', 2), ...p('Triceps', 2), ...p('Abdos', 1)]);
+    const pull = dedup([...p('Dos', 3), ...p('Biceps', 2), ...p('Abdos', 1, 1)]);
+    const legs = dedup([...p('Jambes', lb ? 4 : 3), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1), ...p('Abdos', 1, 1)]);
+
+    const upperA = dedup([...p('Pectoraux', 2), ...p('Dos', 2), ...p('Épaules', 1), ...p('Biceps', 1), ...p('Triceps', 1), ...p('Abdos', 1)]);
+    const upperB = dedup([...p('Pectoraux', 2, 1), ...p('Dos', 2, 1), ...p('Épaules', 2, 1), ...p('Biceps', 1, 1), ...p('Triceps', 1, 1), ...p('Abdos', 1, 1)]);
+    const lowerA = dedup([...p('Jambes', lb ? 4 : 3), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1), ...p('Abdos', 1, 1)]);
+    const lowerB = dedup([...p('Jambes', lb ? 4 : 3, 1), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1, 1), ...p('Abdos', 1, 2)]);
 
     if (split === 'fullbody2') return [{ name: '🏋️ Full Body A', exos: fullA }, { name: '🏋️ Full Body B', exos: fullB }];
-    if (split === 'fullbody3') return [{ name: '🏋️ Full A', exos: fullA }, { name: '🏋️ Full B', exos: fullB }, { name: '🏋️ Full C', exos: [...p('Jambes',lb?2:1,2),...p('Pectoraux',1),...p('Dos',1),...p('Épaules',1,1),...p('Triceps',1),...p('Abdos',1)] }];
+    if (split === 'fullbody3') return [{ name: '🏋️ Full A', exos: fullA }, { name: '🏋️ Full B', exos: fullB }, { name: '🏋️ Full C', exos: dedup([...p('Jambes',lb?2:1,2),...p('Pectoraux',1),...p('Dos',1),...p('Épaules',1,1),...p('Triceps',1),...p('Abdos',1)]) }];
     if (split === 'ppl') return [{ name: '💪 Push', exos: push }, { name: '🔙 Pull', exos: pull }, { name: '🦵 Legs', exos: legs }];
     if (split === 'upper_lower') return [
       { name: '⬆️ Upper A', exos: upperA }, { name: '⬇️ Lower A', exos: lowerA },
@@ -76,9 +79,9 @@ const PLANNER = {
     ];
     if (split === 'ppl_x2') return [
       { name: '💪 Push A', exos: push }, { name: '🔙 Pull A', exos: pull }, { name: '🦵 Legs A', exos: legs },
-      { name: '💪 Push B', exos: [...p('Pectoraux', 2, 1), ...p('Épaules', 2, 1), ...p('Triceps', 2, 1), ...p('Abdos', 1)] },
-      { name: '🔙 Pull B', exos: [...p('Dos', 3, 1), ...p('Biceps', 2, 1), ...p('Abdos', 1, 1)] },
-      { name: '🦵 Legs B', exos: [...p('Jambes', lb ? 4 : 3, 1), ...p('Mollets', 1), ...p('Abdos', 1, 1)] }
+      { name: '💪 Push B', exos: dedup([...p('Pectoraux', 2, 1), ...p('Épaules', 2, 1), ...p('Triceps', 2, 1), ...p('Abdos', 1)]) },
+      { name: '🔙 Pull B', exos: dedup([...p('Dos', 3, 1), ...p('Biceps', 2, 1), ...p('Abdos', 1, 1)]) },
+      { name: '🦵 Legs B', exos: dedup([...p('Jambes', lb ? 4 : 3, 1), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1, 1)]) }
     ];
     return [{ name: 'Séance', exos: fullA }];
   },
@@ -388,6 +391,8 @@ const PLANNER = {
     return ({ beginner: 'débutant', intermediate: 'intermédiaire', advanced: 'avancé' })[l] || l;
   },
 };
+
+
 
 
 

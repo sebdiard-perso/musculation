@@ -421,7 +421,7 @@ const app = {
   _upgradePlanWeeks(p) {
     if (!p.isPlan || !p.params || !p.weeks) return;
     // Ne régénérer qu'une fois par version
-    if (p._planVersion >= 34) return;
+    if (p._planVersion >= 35) return;
     const idx = PLANNER.currentWeekIdx(p);
     const params = p.params;
     const newResult = PLANNER.generate(params);
@@ -432,7 +432,7 @@ const app = {
     }
     // Mettre à jour le repos recommandé
     p.restRecommended = newResult.plan.restRecommended;
-    p._planVersion = 34;
+    p._planVersion = 35;
     // S'assurer que les nouveaux exos existent dans le catalogue utilisateur
     const known = new Set(this.exercises.map(e => e.name));
     p.weeks.forEach(w => w.days.forEach(d => d.exercises.forEach(ex => {
