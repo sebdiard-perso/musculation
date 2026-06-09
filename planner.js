@@ -289,10 +289,18 @@ const PLANNER = {
           exercises: exos.map((name, idx) => {
             const isLastTwo = idx >= exos.length - 2;
             const tech = useTech && isLastTwo ? this.pickTechnique(name) : '';
+            const exoData = cat.find(c => c.name === name);
+            // Exercices isométriques : donner un temps au lieu de reps
+            let reps = deload ? this.softReps(meso.reps) : meso.reps;
+            if (exoData && exoData.isometric) {
+              // Temps de gainage progressif : 30s base, +5s par mésocycle, moins en deload
+              const baseTime = 30 + (mesoIdx * 5);
+              reps = deload ? `${Math.max(20, baseTime - 10)}s` : `${baseTime}s`;
+            }
             return {
               name,
               sets: setsAdj,
-              reps: deload ? this.softReps(meso.reps) : meso.reps,
+              reps,
               kg: 0,
               lastSetTechnique: tech
             };
@@ -391,6 +399,7 @@ const PLANNER = {
     return ({ beginner: 'débutant', intermediate: 'intermédiaire', advanced: 'avancé' })[l] || l;
   },
 };
+
 
 
 
