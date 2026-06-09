@@ -405,15 +405,24 @@ const app = {
     p.currentWeekIdx = idx;
     const w = p.weeks[idx];
     // Cloner les days pour appliquer kg cible + RPE sans contaminer la définition du plan
-    p.days = w.days.map(d => ({
-      name: d.name,
-      exercises: d.exercises.map(ex => {
-        const userExo = this.exercises.find(e => e.name === ex.name);
-        const baseKg = userExo?.defaultKg || 0;
-        const targetKg = PLANNER.computeTargetKg(baseKg, ex.reps, w.deload, w.rpe);
-        return { ...ex, kg: targetKg, targetRpe: w.rpe, deload: w.deload };
-      })
-    }));
+    p.days = w.days.map(d => {
+      // Dédoublonner les exercices (fix pour plans importés avant le correctif)
+      const seen = new Set();
+      const uniqueExos = d.exercises.filter(ex => {
+        if (seen.has(ex.name)) return false;
+        seen.add(ex.name);
+        return true;
+      });
+      return {
+        name: d.name,
+        exercises: uniqueExos.map(ex => {
+          const userExo = this.exercises.find(e => e.name === ex.name);
+          const baseKg = userExo?.defaultKg || 0;
+          const targetKg = PLANNER.computeTargetKg(baseKg, ex.reps, w.deload, w.rpe);
+          return { ...ex, kg: targetKg, targetRpe: w.rpe, deload: w.deload };
+        })
+      };
+    });
     return p;
   },
 
@@ -421,7 +430,7 @@ const app = {
   _upgradePlanWeeks(p) {
     if (!p.isPlan || !p.params || !p.weeks) return;
     // Ne régénérer qu'une fois par version
-    if (p._planVersion >= 35) return;
+    if (p._planVersion >= 36) return;
     const idx = PLANNER.currentWeekIdx(p);
     const params = p.params;
     const newResult = PLANNER.generate(params);
@@ -430,9 +439,20 @@ const app = {
     for (let w = idx; w < 26 && w < newResult.plan.weeks.length; w++) {
       p.weeks[w] = newResult.plan.weeks[w];
     }
+    // Dédoublonner TOUTES les semaines (y compris passées) pour les plans importés
+    p.weeks.forEach(w => {
+      w.days.forEach(d => {
+        const seen = new Set();
+        d.exercises = d.exercises.filter(ex => {
+          if (seen.has(ex.name)) return false;
+          seen.add(ex.name);
+          return true;
+        });
+      });
+    });
     // Mettre à jour le repos recommandé
     p.restRecommended = newResult.plan.restRecommended;
-    p._planVersion = 35;
+    p._planVersion = 36;
     // S'assurer que les nouveaux exos existent dans le catalogue utilisateur
     const known = new Set(this.exercises.map(e => e.name));
     p.weeks.forEach(w => w.days.forEach(d => d.exercises.forEach(ex => {
@@ -814,7 +834,15 @@ const app = {
   },
 
   _launchDay(day) {
-    this.currentWorkout = day.exercises.map(pe => {
+    // Dédoublonner les exercices (sécurité pour plans importés)
+    const seenNames = new Set();
+    const uniqueExercises = day.exercises.filter(pe => {
+      if (seenNames.has(pe.name)) return false;
+      seenNames.add(pe.name);
+      return true;
+    });
+
+    this.currentWorkout = uniqueExercises.map(pe => {
       const exo = this.exercises.find(e => e.name === pe.name);
       const sug = this.getSuggestedWeight(pe.name);
       let kg = pe.kg || (sug ? sug.kg : (exo?.defaultKg || ''));
