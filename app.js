@@ -147,20 +147,42 @@ const app = {
   renderPlanTodayCard() {
     const plan = this.getActivePlan();
     if (!plan) return '';
-    const next = this.getNextPlanDay(plan);
+    let next = this.getNextPlanDay(plan);
     if (!next) return '';
 
+    // Si tous les jours de la semaine sont faits, proposer la semaine suivante
     if (next.allDone) {
-      return `<div class="plan-today-card plan-today-done">
-        <div class="ptc-header">
-          <div class="ptc-emoji">✅</div>
-          <div class="ptc-text">
-            <div class="ptc-title">Semaine ${next.weekIdx + 1} terminée !</div>
-            <div class="ptc-subtitle">${next.week.phase}</div>
+      const currentWeek = plan.currentWeekIdx ?? 0;
+      if (currentWeek < 25) {
+        // Avancer à la semaine suivante
+        plan.weekProgress = currentWeek + 1;
+        this.saveCustomPrograms();
+        this.syncPlanDays(plan);
+        next = this.getNextPlanDay(plan);
+        if (!next || next.allDone) {
+          // Vraiment tout terminé (fin du plan)
+          return `<div class="plan-today-card plan-today-done">
+            <div class="ptc-header">
+              <div class="ptc-emoji">🏆</div>
+              <div class="ptc-text">
+                <div class="ptc-title">Plan terminé !</div>
+                <div class="ptc-subtitle">Félicitations, tu as fini les 26 semaines 🎉</div>
+              </div>
+            </div>
+          </div>`;
+        }
+      } else {
+        // Semaine 26 finie = plan complet
+        return `<div class="plan-today-card plan-today-done">
+          <div class="ptc-header">
+            <div class="ptc-emoji">🏆</div>
+            <div class="ptc-text">
+              <div class="ptc-title">Plan terminé !</div>
+              <div class="ptc-subtitle">Félicitations, 26 semaines complétées 🎉</div>
+            </div>
           </div>
-        </div>
-        <div class="ptc-info">Repos avant la prochaine semaine. Continue à bien dormir et manger 💤</div>
-      </div>`;
+        </div>`;
+      }
     }
 
     const day = next.day;
@@ -628,8 +650,9 @@ const app = {
     const level = document.getElementById('plan-level').value;
     const equipment = document.getElementById('plan-equipment').value;
     const frequency = parseInt(document.getElementById('plan-frequency').value) || 4;
-    // Sauvegarder le genre pour le pré-remplir la prochaine fois
+    // Sauvegarder le genre et l'âge pour le pré-remplir la prochaine fois
     localStorage.setItem('userGender', gender);
+    localStorage.setItem('userAge', String(age));
 
     const result = PLANNER.generate({ age, gender, goal, level, equipment, frequency });
     if (result.error) {
@@ -1475,6 +1498,8 @@ const app = {
       exercises: this.exercises,
       history: this.history,
       customPrograms: this.customPrograms,
+      userAge: localStorage.getItem('userAge') || null,
+      userGender: localStorage.getItem('userGender') || null,
     };
     const json = JSON.stringify(data);
     const filename = `muscutracker-${new Date().toISOString().slice(0, 10)}.json`;
@@ -1589,6 +1614,8 @@ const app = {
       if (data.exercises) { this.exercises = data.exercises; this.saveExercises(); }
       if (data.history) { this.history = data.history; this.saveHistory(); }
       if (data.customPrograms) { this.customPrograms = data.customPrograms; this.saveCustomPrograms(); }
+      if (data.userAge) localStorage.setItem('userAge', data.userAge);
+      if (data.userGender) localStorage.setItem('userGender', data.userGender);
     } else {
       // Fusion intelligente
       if (data.exercises) {
@@ -1622,6 +1649,8 @@ const app = {
         });
         this.saveCustomPrograms();
       }
+      if (data.userAge) localStorage.setItem('userAge', data.userAge);
+      if (data.userGender) localStorage.setItem('userGender', data.userGender);
     }
     this.renderAll();
     this.updateStats();

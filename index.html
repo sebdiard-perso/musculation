@@ -346,7 +346,7 @@
       <p class="settings-desc">Ton âge est utilisé par le générateur 6 mois (temps de repos adapté).</p>
       <div style="display:flex;gap:8px;align-items:center;">
         <label for="settings-age">Âge :</label>
-        <input type="number" id="settings-age" min="14" max="90" style="width:70px;padding:8px;border-radius:8px;border:1px solid #333;background:var(--bg);color:var(--text);" onchange="app.setUserAge(this.value)">
+        <input type="number" id="settings-age" min="14" max="90" style="width:70px;padding:8px;border-radius:8px;border:1px solid #333;background:var(--bg);color:var(--text);" onchange="app.setUserAge(this.value)" oninput="app.setUserAge(this.value)">
         <span>ans</span>
       </div>
     </div>
