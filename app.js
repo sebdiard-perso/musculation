@@ -144,11 +144,103 @@ const app = {
     return { weekIdx, dayIdx: -1, week, day: null, allDone: true };
   },
 
+  // Détermine si l'utilisateur est en jour de repos selon la fréquence du plan
+  isRestDay(plan) {
+    if (!plan || !plan.isPlan || !plan.completedDays || !plan.params) return false;
+    const frequency = plan.params.frequency || 4;
+    
+    // Récupérer les dates de toutes les séances complétées (timestamps)
+    const completedDates = Object.values(plan.completedDays)
+      .map(d => new Date(d))
+      .filter(d => !isNaN(d.getTime()))
+      .sort((a, b) => b - a); // plus récente en premier
+
+    if (!completedDates.length) return false;
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const lastTrainDate = completedDates[0];
+    const lastTrainDayStart = new Date(lastTrainDate.getFullYear(), lastTrainDate.getMonth(), lastTrainDate.getDate()).getTime();
+
+    // Si déjà entraîné aujourd'hui → repos pour le reste de la journée
+    if (lastTrainDayStart === todayStart) return true;
+
+    // Calculer le nombre de jours consécutifs d'entraînement jusqu'à hier
+    let consecutiveDays = 0;
+    let checkDate = todayStart - 24 * 3600 * 1000; // hier
+    for (let i = 0; i < 7; i++) {
+      const dayMatch = completedDates.some(d => {
+        const ds = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        return ds === checkDate;
+      });
+      if (dayMatch) {
+        consecutiveDays++;
+        checkDate -= 24 * 3600 * 1000;
+      } else {
+        break;
+      }
+    }
+
+    // Règles de repos selon la fréquence :
+    // - 2-3 jours/sem : jamais 2 jours consécutifs (repos après chaque séance)
+    // - 4 jours/sem : max 2 jours consécutifs, puis 1 jour de repos
+    // - 5 jours/sem : max 3 jours consécutifs, puis 1 jour de repos
+    // - 6 jours/sem : max 6 jours consécutifs (1 jour repos/semaine)
+    let maxConsecutive;
+    if (frequency <= 3) maxConsecutive = 1;
+    else if (frequency === 4) maxConsecutive = 2;
+    else if (frequency === 5) maxConsecutive = 3;
+    else maxConsecutive = 6;
+
+    return consecutiveDays >= maxConsecutive;
+  },
+
+  // Calcule combien de jours de repos il reste
+  restDaysRemaining(plan) {
+    if (!plan || !plan.completedDays) return 0;
+    const completedDates = Object.values(plan.completedDays)
+      .map(d => new Date(d))
+      .filter(d => !isNaN(d.getTime()))
+      .sort((a, b) => b - a);
+
+    if (!completedDates.length) return 0;
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const lastTrainDate = completedDates[0];
+    const lastTrainDayStart = new Date(lastTrainDate.getFullYear(), lastTrainDate.getMonth(), lastTrainDate.getDate()).getTime();
+
+    // Si entraîné aujourd'hui : au minimum repos demain
+    if (lastTrainDayStart === todayStart) return 1;
+
+    // Sinon c'est qu'on est dans un repos suite à jours consécutifs : reste 1 jour
+    return 1;
+  },
+
   renderPlanTodayCard() {
     const plan = this.getActivePlan();
     if (!plan) return '';
     let next = this.getNextPlanDay(plan);
     if (!next) return '';
+
+    // Vérifier si c'est un jour de repos
+    if (this.isRestDay(plan)) {
+      const frequency = plan.params?.frequency || 4;
+      let restMsg = 'Ton corps récupère et se renforce 💤';
+      if (frequency <= 3) restMsg = 'Avec ' + frequency + ' séances/sem, repose-toi entre chaque entraînement.';
+      else restMsg = 'Après plusieurs jours consécutifs, accorde-toi un jour de récupération.';
+
+      return `<div class="plan-today-card plan-today-rest">
+        <div class="ptc-header">
+          <div class="ptc-emoji">😴</div>
+          <div class="ptc-text">
+            <div class="ptc-title">Jour de repos</div>
+            <div class="ptc-subtitle">${restMsg}</div>
+          </div>
+        </div>
+        <div class="ptc-info">🔋 Récupération · 💧 Hydratation · 🥗 Nutrition · 😴 Sommeil</div>
+      </div>`;
+    }
 
     // Si tous les jours de la semaine sont faits, proposer la semaine suivante
     if (next.allDone) {

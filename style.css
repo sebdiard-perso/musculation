@@ -701,6 +701,11 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
   border-color: rgba(78,204,163,0.4);
   cursor: default;
 }
+.plan-today-card.plan-today-rest {
+  background: rgba(100,149,237,0.10);
+  border-color: rgba(100,149,237,0.35);
+  cursor: default;
+}
 .ptc-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .ptc-emoji { font-size: 2rem; line-height: 1; }
 .ptc-text { flex: 1; min-width: 0; }
