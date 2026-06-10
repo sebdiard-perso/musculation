@@ -1,4 +1,4 @@
-const CACHE_NAME = 'muscu-v39';
+const CACHE_NAME = 'muscu-v41';
 const ASSETS = [
   './index.html', './style.css', './data.js', './animations.js',
   './timer.js', './calendar.js', './planner.js', './app.js',

@@ -789,3 +789,26 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
   font-size: 0.78rem; color: var(--text); line-height: 1.4;
   padding: 4px 8px; background: rgba(255,255,255,0.05); border-radius: 6px;
 }
+
+/* ---------- CHRONO ISOMÉTRIQUE ---------- */
+.guided-chrono-group {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 16px; background: rgba(106,76,255,0.08); border-radius: 12px;
+  border: 1px solid rgba(106,76,255,0.3); width: 100%;
+}
+.chrono-target {
+  font-size: 0.85rem; color: var(--muted);
+}
+.chrono-target strong {
+  color: var(--accent); font-size: 1.1rem;
+}
+.chrono-display {
+  font-size: 3.5rem; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: var(--text); letter-spacing: 2px;
+}
+.chrono-btn {
+  padding: 12px 32px; border-radius: var(--radius); border: none;
+  background: var(--accent); color: #fff; font-size: 1.1rem;
+  font-weight: 700; cursor: pointer; min-width: 180px;
+}
+.chrono-btn:active { opacity: 0.8; }

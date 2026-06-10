@@ -895,6 +895,8 @@ const app = {
   },
 
   renderGuided() {
+    // Reset chrono isométrique au changement de série/exo
+    this._resetIsoChrono();
     const exo = this.currentWorkout[this.guidedExoIndex];
     if (!exo) return;
     const set = exo.sets[this.guidedSetIndex];
@@ -933,11 +935,15 @@ const app = {
          ${tech.detail ? `<div class="tech-detail"><div class="tech-detail-exec">${tech.detail.execution.replace(/\n/g, '<br>')}</div><div class="tech-detail-conseil">💡 ${tech.detail.conseil}</div></div>` : ''}`
       : '';
 
+    const isIsometric = !!(exoData && exoData.isometric);
+    const targetTime = isIsometric ? (set.reps || exo.targetReps || '30s') : null;
+
     document.getElementById('guided-current-set').innerHTML = `
       ${techBadge}
       <div class="guided-set-label">Série ${this.guidedSetIndex + 1} / ${totalSets}${rpLabel}${isUni ? ` — <strong>${this.guidedSide === 'right' ? '💪 Droite' : '🤛 Gauche'}</strong>` : ''}${mode === 'alternated' ? ' <span style="color:var(--muted)">(D+G)</span>' : ''}</div>
       <div class="guided-set-sub">Exercice ${this.guidedExoIndex + 1} / ${totalExos}</div>
       <div class="guided-inputs">
+        ${!isIsometric ? `
         <div class="guided-input-group">
           <label>Poids</label>
           <input type="number" inputmode="decimal" value="${set.kg}" placeholder="0"
@@ -950,6 +956,16 @@ const app = {
             onchange="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].reps=this.value"
             oninput="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].reps=this.value">
         </div>
+        ` : `
+        <div class="guided-chrono-group">
+          <div class="chrono-target">🎯 Objectif : <strong>${targetTime}</strong></div>
+          <div class="chrono-display" id="guided-chrono-display">00:00</div>
+          <button class="chrono-btn" id="guided-chrono-btn" onclick="app.toggleIsoChrono()">▶️ Démarrer</button>
+          <input type="hidden" id="guided-chrono-value"
+            value="${set.reps || ''}"
+            onchange="app.currentWorkout[${this.guidedExoIndex}].sets[${this.guidedSetIndex}].reps=this.value">
+        </div>
+        `}
       </div>
       ${this._getExoTips(exo.name)}
     `;
@@ -969,6 +985,52 @@ const app = {
     const desc = DATA.descriptions[name];
     if (!desc || !desc.tips) return '';
     return `<div class="guided-tips">${desc.tips.split(' · ').map(t => `<span class="guided-tip">${t}</span>`).join('')}</div>`;
+  },
+
+  // Chronomètre pour exercices isométriques
+  _isoChronoInterval: null,
+  _isoChronoStart: 0,
+  _isoChronoRunning: false,
+
+  toggleIsoChrono() {
+    if (this._isoChronoRunning) {
+      this._stopIsoChrono();
+    } else {
+      this._startIsoChrono();
+    }
+  },
+
+  _startIsoChrono() {
+    this._isoChronoStart = Date.now();
+    this._isoChronoRunning = true;
+    const btn = document.getElementById('guided-chrono-btn');
+    if (btn) btn.textContent = '⏹️ Stop';
+    this._isoChronoInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - this._isoChronoStart) / 1000);
+      const m = Math.floor(elapsed / 60);
+      const s = elapsed % 60;
+      const display = document.getElementById('guided-chrono-display');
+      if (display) display.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }, 200);
+  },
+
+  _stopIsoChrono() {
+    clearInterval(this._isoChronoInterval);
+    this._isoChronoRunning = false;
+    const elapsed = Math.floor((Date.now() - this._isoChronoStart) / 1000);
+    const btn = document.getElementById('guided-chrono-btn');
+    if (btn) btn.textContent = `✅ ${elapsed}s enregistré`;
+    // Sauvegarder le temps réalisé comme "reps" (ex: "35s")
+    const val = `${elapsed}s`;
+    const input = document.getElementById('guided-chrono-value');
+    if (input) { input.value = val; input.dispatchEvent(new Event('change')); }
+    this.currentWorkout[this.guidedExoIndex].sets[this.guidedSetIndex].reps = val;
+  },
+
+  _resetIsoChrono() {
+    clearInterval(this._isoChronoInterval);
+    this._isoChronoRunning = false;
+    this._isoChronoStart = 0;
   },
 
   guidedSetFeeling(rpe) {
