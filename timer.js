@@ -194,19 +194,84 @@ const timer = {
 
   set(secs) { this.stop(); this.seconds = secs; this.remaining = secs; this.updateDisplay(); },
 
-  // ---------- Sons déclenchés dans le tick (synchronisés avec le chrono) ----------
-  // Plutôt que de pré-planifier les sons sur AudioContext.currentTime (qui se décale
-  // quand iOS suspend l'AudioContext en background), on déclenche les sons dans _tick()
-  // au moment exact où remaining passe sur 5, 4, 3, 2, 1 et 0.
-  // Le chrono est calé sur Date.now() → les sons le sont aussi.
+  // ---------- Planification des évènements audio/visuels ----------
+  // Stratégie hybride :
+  //  • Les SONS sont pré-planifiés via AudioContext.currentTime → précis à la ms
+  //    et joués même si setInterval est throttlé (onglet en arrière-plan, écran iOS éteint).
+  //  • Les VIBRATIONS / FLASHS sont déclenchés via setTimeout (Date.now()).
+  //  • Un fallback dans _tick() rejoue les sons manqués (cas où l'AudioContext
+  //    a été suspendu en background) — un système de flags évite les doublons.
   _scheduleEvents() {
-    // Annuler les anciens timeouts (vibration/flash)
     this._cancelScheduled();
-    // Rien à pré-planifier — tout est géré dans _tick() maintenant
+    this._emittedBeeps = {};
+    this._emittedBuzzer = false;
+    const N = this.remaining;
+    if (N <= 0) return;
+    const useWebAudio = this.audioCtx && this.beepBuffer && this.buzzerBuffer && !this.bypassMute;
+    const ctxNow = this.audioCtx ? this.audioCtx.currentTime : 0;
+
+    // Bips à remaining = 5,4,3,2,1
+    for (let r = Math.min(5, N - 1); r >= 1; r--) {
+      const offsetSec = N - r;
+      if (offsetSec <= 0) continue;
+      this._scheduleBeep(offsetSec, r, useWebAudio, ctxNow);
+    }
+    // Buzzer final à remaining = 0
+    this._scheduleBuzzer(N, useWebAudio, ctxNow);
   },
 
-  _scheduleBeep() {},
-  _scheduleBuzzer() {},
+  _scheduleBeep(offsetSec, targetRemaining, useWebAudio, ctxNow) {
+    if (useWebAudio) {
+      try {
+        const src = this.audioCtx.createBufferSource();
+        src.buffer = this.beepBuffer;
+        const g = this.audioCtx.createGain();
+        g.gain.value = 0.5;
+        src.connect(g).connect(this.audioCtx.destination);
+        src.start(ctxNow + offsetSec);
+        this._scheduledSources.push(src);
+      } catch (e) {}
+    }
+    const t = setTimeout(() => {
+      // Si Web Audio non utilisé (bypass ou ctx absent) → jouer le son ici
+      if (!useWebAudio) {
+        if (this.bypassMute && this.beepVideo) this._playVideo(this.beepVideo);
+        else if (!this._playBuffer(this.beepBuffer, 0.5)) this._tone(880, 0.12, 0.35);
+      }
+      this._emittedBeeps[targetRemaining] = true;
+      if (navigator.vibrate) navigator.vibrate(80);
+      this._flash('rgba(240,165,0,0.30)', 1, 220);
+    }, offsetSec * 1000);
+    this._scheduledTimeouts.push(t);
+  },
+
+  _scheduleBuzzer(offsetSec, useWebAudio, ctxNow) {
+    if (useWebAudio) {
+      try {
+        const src = this.audioCtx.createBufferSource();
+        src.buffer = this.buzzerBuffer;
+        const g = this.audioCtx.createGain();
+        g.gain.value = 0.7;
+        src.connect(g).connect(this.audioCtx.destination);
+        src.start(ctxNow + offsetSec);
+        this._scheduledSources.push(src);
+      } catch (e) {}
+    }
+    const t = setTimeout(() => {
+      if (!useWebAudio) {
+        if (this.bypassMute && this.buzzerVideo) this._playVideo(this.buzzerVideo);
+        else if (!this._playBuffer(this.buzzerBuffer, 0.7)) {
+          this._tone(660, 0.25, 0.45);
+          setTimeout(() => this._tone(880, 0.25, 0.45), 250);
+          setTimeout(() => this._tone(1100, 0.45, 0.5), 500);
+        }
+      }
+      this._emittedBuzzer = true;
+      if (navigator.vibrate) navigator.vibrate([400, 120, 400, 120, 600]);
+      this._flash('rgba(78,204,163,0.55)', 3, 900);
+    }, offsetSec * 1000);
+    this._scheduledTimeouts.push(t);
+  },
 
   _cancelScheduled() {
     this._scheduledSources.forEach(s => { try { s.stop(); } catch (e) {} });
@@ -221,12 +286,20 @@ const timer = {
     this.remaining = Math.max(0, this._startRemaining - elapsed);
     if (this.remaining !== prev) {
       this.updateDisplay();
-      // Déclencher les sons en temps réel (synchronisés avec le chrono)
+      // Fallback : si une transition de seconde survient sur 5..1 et que le bip
+      // correspondant n'a pas été émis (Web Audio suspendu en background, etc.),
+      // on le joue ici. Le flag évite les doublons avec le setTimeout planifié.
       if (this.remaining >= 1 && this.remaining <= 5 && prev > this.remaining) {
-        this.playBeep();
+        if (!this._emittedBeeps[this.remaining]) {
+          this._emittedBeeps[this.remaining] = true;
+          this.playBeep();
+        }
       }
       if (this.remaining <= 0) {
-        this.playBuzzer();
+        if (!this._emittedBuzzer) {
+          this._emittedBuzzer = true;
+          this.playBuzzer();
+        }
         clearInterval(this.interval);
         this.interval = null;
         this.setTimerClass('done');

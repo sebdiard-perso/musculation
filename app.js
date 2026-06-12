@@ -360,6 +360,8 @@ const app = {
       if (moreBtn) moreBtn.classList.add('active');
     }
     document.getElementById(`view-${view}`).classList.add('active');
+    if (view === 'home') this.renderHome();
+    if (view === 'programs') this.renderPrograms();
     if (view === 'calendar') calendar.render(this.history);
     if (view === 'settings') { this.updateStats(); this.renderSnapshots(); this.showStorageStatus(); }
     if (view === 'assistant') this.renderAssistant();
