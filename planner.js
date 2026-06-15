@@ -203,12 +203,19 @@ const PLANNER = {
     const split = this.pickSplit(frequency, level);
     const ageMod = this.ageModifier(age, gender);
     const periodization = this.goalPeriodization(goal);
+    const repZones = this.goalRepZones(goal);
 
-    // Durée cible : 1h min — 1h30 max par séance
-    // Estimation : ~2 min par série (effort + repos)
-    // → Min = 60 min / 2 = 30 séries, Max = 90 min / 2 = 45 séries
-    const MIN_TOTAL_SETS = 30;
-    const MAX_TOTAL_SETS = 45;
+    // Durée cible : 1h30 (préférée) — 2h max par séance
+    // Estimation : effort moyen 30s + repos recommandé selon âge → secondes par série.
+    // On vise TARGET (1h30) et on tronque si on dépasse une légère marge,
+    // sans jamais dépasser MAX_DURATION (2h).
+    const TARGET_DURATION_S = 90 * 60;   // 1h30 (cible)
+    const MAX_DURATION_S    = 120 * 60;  // 2h (plafond absolu)
+    const TOLERANCE_S       = 12 * 60;   // 12 min de tolérance avant troncature
+    const secPerSet = 30 + (90 + ageMod.restAdd); // effort + repos recommandé
+    const TARGET_TOTAL_SETS = Math.floor(TARGET_DURATION_S / secPerSet);
+    const MAX_TOTAL_SETS    = Math.floor(MAX_DURATION_S / secPerSet);
+    const TOL_SETS          = Math.ceil(TOLERANCE_S / secPerSet);
 
     const weeks = [];
     for (let w = 0; w < 26; w++) {
@@ -225,7 +232,19 @@ const PLANNER = {
         isFinal = w === 25; // semaine 26 = retest / consolidation
       }
       const meso = periodization[mesoIdx];
-      const phaseLabel = isFinal ? 'Bilan & retest' : meso.phase + (deload ? ' (Deload)' : '');
+      // Zone de fibres ciblée cette semaine (DUP hebdomadaire)
+      const zone = this.zoneForWeek(weekInMeso, mesoIdx, deload, isFinal);
+      const zoneLabel = (zone === 'heavy' || zone === 'light') ? ' — ' + this.zoneLabel(zone) : '';
+      const phaseLabel = isFinal
+        ? 'Bilan & retest'
+        : meso.phase + (deload ? ' (Deload)' : zoneLabel);
+
+      // Reps cible selon la zone (sauf pour le mésocycle d'adaptation qui reste sur meso.reps)
+      let weekReps = meso.reps;
+      if (zone === 'heavy') weekReps = repZones.heavy;
+      else if (zone === 'light') weekReps = repZones.light;
+      else if (zone === 'base' && mesoIdx > 0) weekReps = repZones.base;
+      // mesoIdx === 0 (Adaptation) : on garde meso.reps tel quel (sécurité technique)
 
       // Rotation des exercices : on utilise mesoIdx comme offset (skip)
       // → Chaque mésocycle utilise des exercices différents du catalogue
@@ -234,50 +253,61 @@ const PLANNER = {
       // Vérifier que chaque jour a au moins 4 exos
       dayTemplates.forEach(d => { d.exos = d.exos.filter(Boolean); });
 
-      // Volume modulé : semaine 1 base, semaine 2 +1 série, semaine 3 +2 séries, semaine 4 deload (si applicable)
+      // Volume modulé selon la zone DUP : heavy = moins de séries, light = +1 série,
+      // base = série du mésocycle, deload = -1 série.
       let setsAdj = meso.sets;
-      if (!deload && !isFinal) {
-        if (weekInMeso === 1) setsAdj = meso.sets;            // base
-        else if (weekInMeso === 2) setsAdj = meso.sets + 1;   // surcharge volume
-        else if (weekInMeso === 0) setsAdj = Math.max(2, meso.sets - 1); // accumulation douce
-      } else if (deload) {
+      if (deload || isFinal) {
         setsAdj = Math.max(2, meso.sets - 1);
+      } else if (zone === 'heavy') {
+        setsAdj = Math.max(2, meso.sets - 1);   // intensité élevée → volume réduit
+      } else if (zone === 'light') {
+        setsAdj = meso.sets + 1;                // accumulation métabolique
+      } else {
+        setsAdj = meso.sets;                    // base
       }
       // Modificateur d'âge
       setsAdj = Math.max(2, Math.round(setsAdj * ageMod.volumeFactor));
 
-      const rpe = Math.min(meso.rpe, ageMod.intensityCap) - (deload ? 1 : 0);
-      const useTech = !!meso.tech && !deload && !isFinal;
+      // RPE ajusté selon la zone : heavy +1 (cap), light -1, deload -1
+      let rpeBase = meso.rpe;
+      if (zone === 'heavy') rpeBase = meso.rpe + 1;
+      else if (zone === 'light') rpeBase = Math.max(7, meso.rpe - 1);
+      const rpe = Math.min(rpeBase, ageMod.intensityCap) - (deload ? 1 : 0);
+
+      // Techniques d'intensification : jamais en zone lourde (risque/inadapté),
+      // jamais en deload/bilan. Réservées aux zones base et light.
+      const useTech = !!meso.tech && !deload && !isFinal && zone !== 'heavy';
 
       const days = dayTemplates.map(t => {
-        // Calculer le nombre d'exos pour rester entre MIN et MAX séries totales
-        const maxExos = Math.floor(MAX_TOTAL_SETS / setsAdj);
-        const minExos = Math.ceil(MIN_TOTAL_SETS / setsAdj);
+        // Cible : ~TARGET_TOTAL_SETS séries (≈ 1h30). On accepte une marge
+        // (TOL_SETS) avant de tronquer, sans jamais dépasser MAX_TOTAL_SETS (2h).
+        const targetExos = Math.max(4, Math.floor(TARGET_TOTAL_SETS / setsAdj));
+        const maxExos    = Math.max(targetExos, Math.floor(MAX_TOTAL_SETS / setsAdj));
+        const cutExos    = Math.min(maxExos, targetExos + Math.ceil(TOL_SETS / setsAdj));
         let exos = t.exos;
 
-        if (exos.length > maxExos) {
-          // Trop d'exos → tronquer en protégeant les abdos
-          const abdos = exos.filter(name => {
+        if (exos.length > cutExos) {
+          // Trop d'exos → tronquer à cutExos en protégeant les abdos
+          const isAbdo = (name) => {
             const n = name.toLowerCase();
             return n.includes('crunch') || n.includes('relevé') || n.includes('releve') || n.includes('gainage') || n.includes('mountain');
-          });
-          const nonAbdos = exos.filter(name => {
-            const n = name.toLowerCase();
-            return !n.includes('crunch') && !n.includes('relevé') && !n.includes('releve') && !n.includes('gainage') && !n.includes('mountain');
-          });
-          exos = nonAbdos.slice(0, maxExos - abdos.length).concat(abdos);
-        } else if (exos.length < minExos) {
-          // Pas assez d'exos → en ajouter depuis le catalogue (même muscles, variantes)
+          };
+          const abdos = exos.filter(isAbdo);
+          const nonAbdos = exos.filter(n => !isAbdo(n));
+          exos = nonAbdos.slice(0, Math.max(1, cutExos - abdos.length)).concat(abdos);
+        } else if (exos.length < targetExos) {
+          // Pas assez d'exos → en ajouter depuis le catalogue (mêmes muscles, variantes)
+          // pour atteindre la cible (≈ 1h30).
           const existing = new Set(exos);
           const muscles = [...new Set(exos.map(name => {
             const e = cat.find(c => c.name === name);
             return e ? e.muscle : '';
           }).filter(Boolean))];
           for (const m of muscles) {
-            if (exos.length >= minExos) break;
+            if (exos.length >= targetExos) break;
             const extras = cat.filter(c => c.muscle === m && !existing.has(c.name));
             for (const ex of extras) {
-              if (exos.length >= minExos) break;
+              if (exos.length >= targetExos) break;
               exos.push(ex.name);
               existing.add(ex.name);
             }
@@ -291,7 +321,7 @@ const PLANNER = {
             const tech = useTech && isLastTwo ? this.pickTechnique(name) : '';
             const exoData = cat.find(c => c.name === name);
             // Exercices isométriques : donner un temps au lieu de reps
-            let reps = deload ? this.softReps(meso.reps) : meso.reps;
+            let reps = deload ? this.softReps(weekReps) : weekReps;
             if (exoData && exoData.isometric) {
               // Temps de gainage progressif : 30s base, +5s par mésocycle, moins en deload
               const baseTime = 30 + (mesoIdx * 5);
@@ -308,7 +338,7 @@ const PLANNER = {
         };
       });
 
-      weeks.push({ weekNum: w + 1, mesoIdx, phase: phaseLabel, deload: !!deload || !!isFinal, rpe, days });
+      weeks.push({ weekNum: w + 1, mesoIdx, phase: phaseLabel, deload: !!deload || !!isFinal, rpe, zone, days });
     }
 
     const goalLabel = this.goalLabel(goal);
