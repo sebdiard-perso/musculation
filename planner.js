@@ -142,6 +142,40 @@ const PLANNER = {
     return G[goal] || G.masse;
   },
 
+  // ---------- Périodisation ondulée hebdomadaire (DUP) ----------
+  // À l'intérieur d'un mésocycle de 4 semaines, on fait varier la zone de reps
+  // pour cibler TOUTES les fibres musculaires :
+  //   • heavy = reps basses → fibres rapides type II (force, recrutement neural)
+  //   • base  = reps modérées → fibres mixtes IIa (hypertrophie classique)
+  //   • light = reps hautes → fibres lentes type I (volume métabolique, capillarisation)
+  // Les mêmes exercices sont conservés dans le mésocycle (suivi de la progression),
+  // mais la charge se recalcule automatiquement via repFactor() à chaque zone.
+  goalRepZones(goal) {
+    return ({
+      masse:        { heavy: '5-7',  base: '8-12',  light: '13-18' },
+      force:        { heavy: '3-5',  base: '5-7',   light: '8-10'  },
+      perte_gras:   { heavy: '8-10', base: '12-15', light: '18-25' },
+      tonification: { heavy: '8-10', base: '12-15', light: '15-20' },
+      maintien:     { heavy: '6-8',  base: '8-12',  light: '12-15' },
+    })[goal] || { heavy: '5-7', base: '8-12', light: '13-18' };
+  },
+
+  // Zone de fibres ciblée pour une semaine donnée du mésocycle
+  zoneForWeek(weekInMeso, mesoIdx, deload, isFinal) {
+    if (deload || isFinal) return 'deload';
+    // Mésocycle 0 (Adaptation) : pas de DUP, on reste sur la zone de base pour
+    // privilégier la maîtrise technique avant d'aller chercher du lourd.
+    if (mesoIdx === 0) return 'base';
+    if (weekInMeso === 0) return 'heavy';
+    if (weekInMeso === 1) return 'base';
+    if (weekInMeso === 2) return 'light';
+    return 'base';
+  },
+
+  zoneLabel(zone) {
+    return ({ heavy: 'Lourd · fibres II', base: 'Hypertrophie · fibres mixtes', light: 'Volume · fibres I' })[zone] || '';
+  },
+
   // ---------- Modificateur d'âge & genre ----------
   // Prend en compte les spécificités hormonales :
   // - Femme 45+ : périménopause/ménopause → perte osseuse, sarcopénie accélérée

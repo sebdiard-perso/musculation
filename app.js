@@ -515,8 +515,11 @@ const app = {
   // PROGRAMS
   syncPlanDays(p) {
     if (!p || !p.isPlan || !p.weeks) return p;
-    // Mettre à jour les semaines restantes avec la nouvelle logique du planner
-    this._upgradePlanWeeks(p);
+    // Mettre à jour les semaines restantes avec la nouvelle logique du planner.
+    // On entoure d'un try/catch : si le planner a une régression ou si le plan
+    // importé est malformé, on ne veut pas casser tout le rendu / l'import.
+    try { this._upgradePlanWeeks(p); }
+    catch (e) { console.warn('Skip _upgradePlanWeeks:', e); }
     const idx = PLANNER.currentWeekIdx(p);
     p.currentWeekIdx = idx;
     const w = p.weeks[idx];
