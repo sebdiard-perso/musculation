@@ -9,7 +9,7 @@ const PLANNER = {
     const tags = [];
     if (n.includes('barre')) tags.push('barbell');
     if (n.includes('haltère')) tags.push('dumbbell');
-    if (n.includes('banc') || n.includes('couché') || n.includes('incliné') || n.includes('assis') || n.includes('bulgares')) tags.push('bench');
+    if (n.includes('banc') || n.includes('couché') || n.includes('incliné') || n.includes('assis') || n.includes('bulgares') || n.includes('hip thrust')) tags.push('bench');
     if (n.includes('crunch') || n.includes('relevé') || n.includes('dips') || n.includes('fentes')) tags.push('bodyweight');
     if (!tags.length) tags.push('dumbbell');
     return tags;
@@ -95,48 +95,50 @@ const PLANNER = {
   },
 
   // ---------- Périodisation par objectif ----------
-  // 6 mésocycles de 4 semaines (24) + 2 semaines test/deload final = 26 semaines
+  // Programme Masse : 24 semaines Upper/Lower avec deloads aux semaines 5, 9, 13, 17, 21
+  // + 2 semaines bonus (deload final + retest) = 26 semaines
+  // Phases : Adaptation → Volume → Intensité → Variation (Supersets) → Volume Élevé (Dropsets) → Pic (Rest-Pause, Giant Sets)
   goalPeriodization(goal) {
     const G = {
       masse: [
-        { phase: 'Adaptation',         sets: 3, reps: '10-12', rpe: 7, tech: false },
-        { phase: 'Hypertrophie base',  sets: 4, reps: '8-12',  rpe: 8, tech: false },
-        { phase: 'Hypertrophie+',      sets: 4, reps: '8-10',  rpe: 8, tech: true  },
-        { phase: 'Force-volume',       sets: 4, reps: '6-8',   rpe: 8, tech: false },
-        { phase: 'Pic intensité',      sets: 4, reps: '8-10',  rpe: 9, tech: true  },
-        { phase: 'Spécialisation',     sets: 4, reps: '10-12', rpe: 9, tech: true  },
+        { phase: 'Adaptation',         sets: 3, reps: '12-15', rpe: 7, tech: false, rest: '60-90',  techType: null },
+        { phase: 'Volume',             sets: 4, reps: '10-12', rpe: 8, tech: false, rest: '60-120', techType: null },
+        { phase: 'Intensité',          sets: 4, reps: '8-10',  rpe: 8, tech: false, rest: '90-120', techType: null },
+        { phase: 'Variation',          sets: 4, reps: '8-12',  rpe: 8, tech: true,  rest: '60-120', techType: 'superset' },
+        { phase: 'Volume Élevé',       sets: 4, reps: '10-12', rpe: 8, tech: true,  rest: '60-90',  techType: 'dropset' },
+        { phase: 'Pic',                sets: 4, reps: '6-8',   rpe: 9, tech: true,  rest: '120-180', techType: 'rest-pause' },
       ],
       force: [
-        { phase: 'Adaptation',         sets: 3, reps: '8-10',  rpe: 7, tech: false },
-        { phase: 'Volume force',       sets: 4, reps: '6-8',   rpe: 8, tech: false },
-        { phase: 'Force base',         sets: 5, reps: '5-6',   rpe: 8, tech: false },
-        { phase: 'Force max',          sets: 5, reps: '3-5',   rpe: 9, tech: false },
-        { phase: 'Pic',                sets: 4, reps: '5-6',   rpe: 9, tech: true  },
-        { phase: 'Test 1RM',           sets: 3, reps: '3-5',   rpe: 9, tech: false },
+        { phase: 'Adaptation',         sets: 3, reps: '8-10',  rpe: 7, tech: false, rest: '90-120', techType: null },
+        { phase: 'Volume force',       sets: 4, reps: '6-8',   rpe: 8, tech: false, rest: '120-180', techType: null },
+        { phase: 'Force base',         sets: 5, reps: '5-6',   rpe: 8, tech: false, rest: '180-240', techType: null },
+        { phase: 'Force max',          sets: 5, reps: '3-5',   rpe: 9, tech: false, rest: '180-300', techType: null },
+        { phase: 'Pic',                sets: 4, reps: '5-6',   rpe: 9, tech: true,  rest: '180-240', techType: 'rest-pause' },
+        { phase: 'Test 1RM',           sets: 3, reps: '3-5',   rpe: 9, tech: false, rest: '180-300', techType: null },
       ],
       perte_gras: [
-        { phase: 'Adaptation',         sets: 3, reps: '12-15', rpe: 7, tech: false },
-        { phase: 'Volume',             sets: 3, reps: '12-15', rpe: 8, tech: false },
-        { phase: 'Densité',            sets: 4, reps: '12-15', rpe: 8, tech: true  },
-        { phase: 'Métabolique',        sets: 3, reps: '15-20', rpe: 8, tech: true  },
-        { phase: 'Pic métabolique',    sets: 4, reps: '12-15', rpe: 9, tech: true  },
-        { phase: 'Maintien densité',   sets: 3, reps: '12-15', rpe: 8, tech: false },
+        { phase: 'Adaptation',         sets: 3, reps: '12-15', rpe: 7, tech: false, rest: '45-60', techType: null },
+        { phase: 'Volume',             sets: 3, reps: '12-15', rpe: 8, tech: false, rest: '45-60', techType: null },
+        { phase: 'Densité',            sets: 4, reps: '12-15', rpe: 8, tech: true,  rest: '30-45', techType: 'superset' },
+        { phase: 'Métabolique',        sets: 3, reps: '15-20', rpe: 8, tech: true,  rest: '30-45', techType: 'dropset' },
+        { phase: 'Pic métabolique',    sets: 4, reps: '12-15', rpe: 9, tech: true,  rest: '30-60', techType: 'dropset' },
+        { phase: 'Maintien densité',   sets: 3, reps: '12-15', rpe: 8, tech: false, rest: '45-60', techType: null },
       ],
       tonification: [
-        { phase: 'Adaptation',         sets: 3, reps: '12-15', rpe: 7, tech: false },
-        { phase: 'Endurance',          sets: 3, reps: '15-20', rpe: 7, tech: false },
-        { phase: 'Hypertrophie légère',sets: 4, reps: '10-12', rpe: 8, tech: false },
-        { phase: 'Volume',             sets: 4, reps: '12-15', rpe: 8, tech: true  },
-        { phase: 'Pic',                sets: 4, reps: '10-12', rpe: 8, tech: true  },
-        { phase: 'Maintien',           sets: 3, reps: '12-15', rpe: 7, tech: false },
+        { phase: 'Adaptation',         sets: 3, reps: '12-15', rpe: 7, tech: false, rest: '60-90', techType: null },
+        { phase: 'Endurance',          sets: 3, reps: '15-20', rpe: 7, tech: false, rest: '45-60', techType: null },
+        { phase: 'Hypertrophie légère',sets: 4, reps: '10-12', rpe: 8, tech: false, rest: '60-90', techType: null },
+        { phase: 'Volume',             sets: 4, reps: '12-15', rpe: 8, tech: true,  rest: '60-90', techType: 'superset' },
+        { phase: 'Pic',                sets: 4, reps: '10-12', rpe: 8, tech: true,  rest: '60-90', techType: 'dropset' },
+        { phase: 'Maintien',           sets: 3, reps: '12-15', rpe: 7, tech: false, rest: '60-90', techType: null },
       ],
       maintien: [
-        { phase: 'Maintien',           sets: 3, reps: '8-12',  rpe: 7, tech: false },
-        { phase: 'Maintien',           sets: 3, reps: '8-12',  rpe: 7, tech: false },
-        { phase: 'Stim. modérée',      sets: 3, reps: '8-12',  rpe: 8, tech: false },
-        { phase: 'Maintien',           sets: 3, reps: '8-12',  rpe: 7, tech: false },
-        { phase: 'Stim. modérée',      sets: 3, reps: '8-12',  rpe: 8, tech: false },
-        { phase: 'Maintien',           sets: 3, reps: '8-12',  rpe: 7, tech: false },
+        { phase: 'Maintien',           sets: 3, reps: '8-12',  rpe: 7, tech: false, rest: '60-90', techType: null },
+        { phase: 'Maintien',           sets: 3, reps: '8-12',  rpe: 7, tech: false, rest: '60-90', techType: null },
+        { phase: 'Stim. modérée',      sets: 3, reps: '8-12',  rpe: 8, tech: false, rest: '60-90', techType: null },
+        { phase: 'Maintien',           sets: 3, reps: '8-12',  rpe: 7, tech: false, rest: '60-90', techType: null },
+        { phase: 'Stim. modérée',      sets: 3, reps: '8-12',  rpe: 8, tech: false, rest: '60-90', techType: null },
+        { phase: 'Maintien',           sets: 3, reps: '8-12',  rpe: 7, tech: false, rest: '60-90', techType: null },
       ],
     };
     return G[goal] || G.masse;
@@ -215,7 +217,7 @@ const PLANNER = {
   pickTechnique(exoName) {
     const n = exoName.toLowerCase();
     if (n.includes('curl biceps')) return '21';
-    if (n.includes('squat') || n.includes('fentes') || n.includes('roumain') || n.includes('goblet')) return 'tempo';
+    if (n.includes('squat') || n.includes('fentes') || n.includes('roumain') || n.includes('goblet') || n.includes('hip thrust')) return 'tempo';
     if (n.includes('élévations') || n.includes('mollets') || n.includes('oiseau')) return 'partial';
     if (n.includes('shrug')) return 'iso-hold';
     if (n.includes('couché barre') || n.includes('rowing barre') || n.includes('soulevé de terre barre') || n.includes('militaire barre') || n.includes('dips')) return 'rest-pause';
@@ -240,110 +242,176 @@ const PLANNER = {
     const repZones = this.goalRepZones(goal);
 
     // Durée cible : 1h30 (préférée) — 2h max par séance
-    // Estimation : effort moyen 30s + repos recommandé selon âge → secondes par série.
-    // On vise TARGET (1h30) et on tronque si on dépasse une légère marge,
-    // sans jamais dépasser MAX_DURATION (2h).
-    const TARGET_DURATION_S = 90 * 60;   // 1h30 (cible)
-    const MAX_DURATION_S    = 120 * 60;  // 2h (plafond absolu)
-    const TOLERANCE_S       = 12 * 60;   // 12 min de tolérance avant troncature
-    const secPerSet = 30 + (90 + ageMod.restAdd); // effort + repos recommandé
+    const TARGET_DURATION_S = 90 * 60;
+    const MAX_DURATION_S    = 120 * 60;
+    const TOLERANCE_S       = 12 * 60;
+    const secPerSet = 30 + (90 + ageMod.restAdd);
     const TARGET_TOTAL_SETS = Math.floor(TARGET_DURATION_S / secPerSet);
     const MAX_TOTAL_SETS    = Math.floor(MAX_DURATION_S / secPerSet);
     const TOL_SETS          = Math.ceil(TOLERANCE_S / secPerSet);
 
+    // ---------- Structure des semaines pour "masse" (programme Mistral) ----------
+    // Deloads : semaines 5, 9, 13, 17, 21 (index 4, 8, 12, 16, 20)
+    // Phases :
+    //   Phase 1 Adaptation : sem 1–4 (index 0–3)
+    //   Deload 1 : sem 5 (index 4)
+    //   Phase 2 Volume : sem 6–8 (index 5–7)
+    //   Deload 2 : sem 9 (index 8)
+    //   Phase 3 Intensité : sem 10–12 (index 9–11)
+    //   Deload 3 : sem 13 (index 12)
+    //   Phase 4 Variation : sem 14–16 (index 13–15)
+    //   Deload 4 : sem 17 (index 16)
+    //   Phase 5 Volume Élevé : sem 18–20 (index 17–19)
+    //   Deload 5 : sem 21 (index 20)
+    //   Phase 6 Pic : sem 22–24 (index 21–23)
+    //   + sem 25 deload final, sem 26 retest
+    const masseWeekMap = goal === 'masse' ? this._buildMasseWeekMap() : null;
+
     const weeks = [];
     for (let w = 0; w < 26; w++) {
-      // Mésocycle 0..5 → 6×4=24 semaines; semaines 24-25 = deload + retest
       let mesoIdx, weekInMeso, deload, isFinal;
-      if (w < 24) {
-        mesoIdx = Math.floor(w / 4);
-        weekInMeso = w % 4;
-        deload = (weekInMeso === 3) && (mesoIdx >= 1); // deload semaine 4 des mésocycles 2 à 6
+
+      if (goal === 'masse') {
+        // Utiliser la structure Mistral pour masse
+        if (w < 24) {
+          const wm = masseWeekMap[w];
+          mesoIdx = wm.mesoIdx;
+          weekInMeso = wm.weekInMeso;
+          deload = wm.deload;
+          isFinal = false;
+        } else {
+          mesoIdx = 5;
+          weekInMeso = 3;
+          deload = w === 24;
+          isFinal = w === 25;
+        }
       } else {
-        mesoIdx = 5;
-        weekInMeso = 3;
-        deload = w === 24; // semaine 25 = deload
-        isFinal = w === 25; // semaine 26 = retest / consolidation
+        // Logique originale pour les autres objectifs
+        if (w < 24) {
+          mesoIdx = Math.floor(w / 4);
+          weekInMeso = w % 4;
+          deload = (weekInMeso === 3) && (mesoIdx >= 1);
+        } else {
+          mesoIdx = 5;
+          weekInMeso = 3;
+          deload = w === 24;
+          isFinal = w === 25;
+        }
       }
+
       const meso = periodization[mesoIdx];
       // Zone de fibres ciblée cette semaine (DUP hebdomadaire)
-      const zone = this.zoneForWeek(weekInMeso, mesoIdx, deload, isFinal);
+      // Pour masse : pas de DUP, on reste sur 'base' (les reps sont gérées par phase)
+      const zone = goal === 'masse'
+        ? (deload || isFinal ? 'deload' : 'base')
+        : this.zoneForWeek(weekInMeso, mesoIdx, deload, isFinal);
       const zoneLabel = (zone === 'heavy' || zone === 'light') ? ' — ' + this.zoneLabel(zone) : '';
       const phaseLabel = isFinal
         ? 'Bilan & retest'
         : meso.phase + (deload ? ' (Deload)' : zoneLabel);
 
-      // Reps cible selon la zone (sauf pour le mésocycle d'adaptation qui reste sur meso.reps)
+      // Reps cible selon la zone
       let weekReps = meso.reps;
-      if (zone === 'heavy') weekReps = repZones.heavy;
-      else if (zone === 'light') weekReps = repZones.light;
-      else if (zone === 'base' && mesoIdx > 0) weekReps = repZones.base;
-      // mesoIdx === 0 (Adaptation) : on garde meso.reps tel quel (sécurité technique)
+      if (goal === 'masse') {
+        // Pour masse, on respecte les reps de la phase (pas de DUP heavy/light)
+        // sauf en deload où on garde les mêmes reps mais volume réduit
+        weekReps = meso.reps;
+        // Phase 6 Pic : séries lourdes 6-8 + séries légères 12-15
+        // On garde le reps de base, les séries légères sont gérées par les techniques
+      } else {
+        if (zone === 'heavy') weekReps = repZones.heavy;
+        else if (zone === 'light') weekReps = repZones.light;
+        else if (zone === 'base' && mesoIdx > 0) weekReps = repZones.base;
+      }
 
-      // Rotation des exercices : on utilise mesoIdx comme offset (skip)
-      // → Chaque mésocycle utilise des exercices différents du catalogue
+      // Rotation des exercices
       const dayTemplates = this.buildDayTemplates(split, cat, mesoIdx, ageMod);
-
-      // Vérifier que chaque jour a au moins 4 exos
       dayTemplates.forEach(d => { d.exos = d.exos.filter(Boolean); });
 
-      // Volume modulé selon la zone DUP : heavy = moins de séries, light = +1 série,
-      // base = série du mésocycle, deload = -1 série.
+      // Volume (séries) ajusté
       let setsAdj = meso.sets;
-      if (deload || isFinal) {
-        setsAdj = Math.max(2, meso.sets - 1);
-      } else if (zone === 'heavy') {
-        setsAdj = Math.max(2, meso.sets - 1);   // intensité élevée → volume réduit
-      } else if (zone === 'light') {
-        setsAdj = meso.sets + 1;                // accumulation métabolique
+      if (goal === 'masse') {
+        // Programme Mistral : deload = 2 séries, sinon selon la phase
+        if (deload || isFinal) {
+          setsAdj = 2;
+        } else {
+          setsAdj = meso.sets;
+        }
       } else {
-        setsAdj = meso.sets;                    // base
+        if (deload || isFinal) {
+          setsAdj = Math.max(2, meso.sets - 1);
+        } else if (zone === 'heavy') {
+          setsAdj = Math.max(2, meso.sets - 1);
+        } else if (zone === 'light') {
+          setsAdj = meso.sets + 1;
+        }
       }
       // Modificateur d'âge
       setsAdj = Math.max(2, Math.round(setsAdj * ageMod.volumeFactor));
 
-      // RPE ajusté selon la zone : heavy +1 (cap), light -1, deload -1
-      let rpeBase = meso.rpe;
-      if (zone === 'heavy') rpeBase = meso.rpe + 1;
-      else if (zone === 'light') rpeBase = Math.max(7, meso.rpe - 1);
-      const rpe = Math.min(rpeBase, ageMod.intensityCap) - (deload ? 1 : 0);
+      // RPE ajusté
+      let rpe;
+      if (goal === 'masse') {
+        // Deload : RPE 6-7 fixe (on utilise 7)
+        rpe = deload ? Math.min(7, ageMod.intensityCap) : Math.min(meso.rpe, ageMod.intensityCap);
+      } else {
+        let rpeBase = meso.rpe;
+        if (zone === 'heavy') rpeBase = meso.rpe + 1;
+        else if (zone === 'light') rpeBase = Math.max(7, meso.rpe - 1);
+        rpe = Math.min(rpeBase, ageMod.intensityCap) - (deload ? 1 : 0);
+      }
 
-      // Techniques d'intensification : jamais en zone lourde (risque/inadapté),
-      // jamais en deload/bilan. Réservées aux zones base et light.
-      const useTech = !!meso.tech && !deload && !isFinal && zone !== 'heavy';
+      // Techniques d'intensification selon la phase
+      const useTech = !!meso.tech && !deload && !isFinal;
+      const techType = meso.techType || null;
 
       const days = dayTemplates.map(t => {
-        // Cible : ~TARGET_TOTAL_SETS séries (≈ 1h30). On accepte une marge
-        // (TOL_SETS) avant de tronquer, sans jamais dépasser MAX_TOTAL_SETS (2h).
-        const targetExos = Math.max(4, Math.floor(TARGET_TOTAL_SETS / setsAdj));
-        const maxExos    = Math.max(targetExos, Math.floor(MAX_TOTAL_SETS / setsAdj));
-        const cutExos    = Math.min(maxExos, targetExos + Math.ceil(TOL_SETS / setsAdj));
         let exos = t.exos;
 
-        if (exos.length > cutExos) {
-          // Trop d'exos → tronquer à cutExos en protégeant les abdos
-          const isAbdo = (name) => {
-            const n = name.toLowerCase();
-            return n.includes('crunch') || n.includes('relevé') || n.includes('releve') || n.includes('gainage') || n.includes('mountain');
-          };
-          const abdos = exos.filter(isAbdo);
-          const nonAbdos = exos.filter(n => !isAbdo(n));
-          exos = nonAbdos.slice(0, Math.max(1, cutExos - abdos.length)).concat(abdos);
-        } else if (exos.length < targetExos) {
-          // Pas assez d'exos → en ajouter depuis le catalogue (mêmes muscles, variantes)
-          // pour atteindre la cible (≈ 1h30).
-          const existing = new Set(exos);
-          const muscles = [...new Set(exos.map(name => {
-            const e = cat.find(c => c.name === name);
-            return e ? e.muscle : '';
-          }).filter(Boolean))];
-          for (const m of muscles) {
-            if (exos.length >= targetExos) break;
-            const extras = cat.filter(c => c.muscle === m && !existing.has(c.name));
-            for (const ex of extras) {
+        if (goal === 'masse') {
+          // Programme Mistral : 6-7 exercices par séance (pas de remplissage)
+          // Upper : ~6 exos composés + isolation + abdos intégrés
+          // Lower : ~5-6 exos + mollets + abdos/gainage
+          const masseMaxExos = deload ? 5 : 7;
+          if (exos.length > masseMaxExos) {
+            // Garder les abdos/gainage (max 1) et tronquer le reste
+            const isAbdo = (name) => {
+              const n = name.toLowerCase();
+              return n.includes('crunch') || n.includes('relevé') || n.includes('releve') || n.includes('gainage') || n.includes('mountain');
+            };
+            const abdos = exos.filter(isAbdo).slice(0, 1);
+            const nonAbdos = exos.filter(n => !isAbdo(n));
+            exos = nonAbdos.slice(0, masseMaxExos - abdos.length).concat(abdos);
+          }
+          // Pas de remplissage automatique pour masse
+        } else {
+          // Logique originale pour les autres objectifs
+          const targetExos = Math.max(4, Math.floor(TARGET_TOTAL_SETS / setsAdj));
+          const maxExos    = Math.max(targetExos, Math.floor(MAX_TOTAL_SETS / setsAdj));
+          const cutExos    = Math.min(maxExos, targetExos + Math.ceil(TOL_SETS / setsAdj));
+
+          if (exos.length > cutExos) {
+            const isAbdo = (name) => {
+              const n = name.toLowerCase();
+              return n.includes('crunch') || n.includes('relevé') || n.includes('releve') || n.includes('gainage') || n.includes('mountain');
+            };
+            const abdos = exos.filter(isAbdo);
+            const nonAbdos = exos.filter(n => !isAbdo(n));
+            exos = nonAbdos.slice(0, Math.max(1, cutExos - abdos.length)).concat(abdos);
+          } else if (exos.length < targetExos) {
+            const existing = new Set(exos);
+            const muscles = [...new Set(exos.map(name => {
+              const e = cat.find(c => c.name === name);
+              return e ? e.muscle : '';
+            }).filter(Boolean))];
+            for (const m of muscles) {
               if (exos.length >= targetExos) break;
-              exos.push(ex.name);
-              existing.add(ex.name);
+              const extras = cat.filter(c => c.muscle === m && !existing.has(c.name));
+              for (const ex of extras) {
+                if (exos.length >= targetExos) break;
+                exos.push(ex.name);
+                existing.add(ex.name);
+              }
             }
           }
         }
@@ -352,14 +420,33 @@ const PLANNER = {
           name: t.name,
           exercises: exos.map((name, idx) => {
             const isLastTwo = idx >= exos.length - 2;
-            const tech = useTech && isLastTwo ? this.pickTechnique(name) : '';
+            let tech = '';
+            if (useTech && !deload) {
+              if (goal === 'masse') {
+                // Phase 4 (Variation) : supersets sur les 2 derniers exos
+                // Phase 5 (Volume Élevé) : dropset sur le 1er exo composé
+                // Phase 6 (Pic) : rest-pause sur le 2ème exo, techniques avancées
+                if (techType === 'superset' && isLastTwo) {
+                  tech = 'superset';
+                } else if (techType === 'dropset' && idx === 0) {
+                  tech = 'dropset';
+                } else if (techType === 'rest-pause') {
+                  if (idx === 1) tech = 'rest-pause';
+                  else if (isLastTwo) tech = 'superset'; // Giant set simulé par superset
+                }
+              } else {
+                tech = isLastTwo ? this.pickTechnique(name) : '';
+              }
+            }
             const exoData = cat.find(c => c.name === name);
-            // Exercices isométriques : donner un temps au lieu de reps
             let reps = deload ? this.softReps(weekReps) : weekReps;
             if (exoData && exoData.isometric) {
-              // Temps de gainage progressif : 30s base, +5s par mésocycle, moins en deload
               const baseTime = 30 + (mesoIdx * 5);
               reps = deload ? `${Math.max(20, baseTime - 10)}s` : `${baseTime}s`;
+            }
+            // Phase 6 Pic : séries légères (derniers exos) en 12-15 reps
+            if (goal === 'masse' && mesoIdx === 5 && !deload && !isFinal && isLastTwo && !(exoData && exoData.isometric)) {
+              reps = '12-15';
             }
             return {
               name,
@@ -372,12 +459,20 @@ const PLANNER = {
         };
       });
 
-      weeks.push({ weekNum: w + 1, mesoIdx, phase: phaseLabel, deload: !!deload || !!isFinal, rpe, zone, days });
+      // Repos recommandé pour cette semaine (masse = variable par phase)
+      const restForWeek = goal === 'masse'
+        ? (deload ? 90 : parseInt(meso.rest) || 90)
+        : (90 + ageMod.restAdd);
+
+      weeks.push({ weekNum: w + 1, mesoIdx, phase: phaseLabel, deload: !!deload || !!isFinal, rpe, zone, days, restRecommended: restForWeek });
     }
 
     const goalLabel = this.goalLabel(goal);
     const eqLabel = this.equipmentLabel(equipment);
     const startDate = new Date().toISOString();
+
+    // Repos recommandé global (pour masse, on prend la médiane)
+    const globalRest = goal === 'masse' ? 90 : (90 + ageMod.restAdd);
 
     const plan = {
       id: 'plan_' + Date.now(),
@@ -387,16 +482,42 @@ const PLANNER = {
       params,
       ageMod,
       startDate,
-      restRecommended: 90 + ageMod.restAdd,
+      restRecommended: globalRest,
       weeks,
-      // Avancement par complétion : weekProgress augmente quand toutes les séances
-      // de la semaine courante sont marquées comme faites dans completedDays.
       weekProgress: 0,
       completedDays: {},
-      // days = synchronisé avec la semaine en cours (mis à jour dynamiquement)
       days: weeks[0].days
     };
     return { plan };
+  },
+
+  // ---------- Structure des semaines Masse (programme Mistral) ----------
+  // Mapping semaine globale → phase + deload
+  _buildMasseWeekMap() {
+    const map = [];
+    // Phase 1 Adaptation : semaines 1–4 (index 0–3), mesoIdx=0
+    for (let i = 0; i < 4; i++) map.push({ mesoIdx: 0, weekInMeso: i, deload: false });
+    // Deload 1 : semaine 5 (index 4), mesoIdx=0
+    map.push({ mesoIdx: 0, weekInMeso: 0, deload: true });
+    // Phase 2 Volume : semaines 6–8 (index 5–7), mesoIdx=1
+    for (let i = 0; i < 3; i++) map.push({ mesoIdx: 1, weekInMeso: i, deload: false });
+    // Deload 2 : semaine 9 (index 8), mesoIdx=1
+    map.push({ mesoIdx: 1, weekInMeso: 0, deload: true });
+    // Phase 3 Intensité : semaines 10–12 (index 9–11), mesoIdx=2
+    for (let i = 0; i < 3; i++) map.push({ mesoIdx: 2, weekInMeso: i, deload: false });
+    // Deload 3 : semaine 13 (index 12), mesoIdx=2
+    map.push({ mesoIdx: 2, weekInMeso: 0, deload: true });
+    // Phase 4 Variation : semaines 14–16 (index 13–15), mesoIdx=3
+    for (let i = 0; i < 3; i++) map.push({ mesoIdx: 3, weekInMeso: i, deload: false });
+    // Deload 4 : semaine 17 (index 16), mesoIdx=3
+    map.push({ mesoIdx: 3, weekInMeso: 0, deload: true });
+    // Phase 5 Volume Élevé : semaines 18–20 (index 17–19), mesoIdx=4
+    for (let i = 0; i < 3; i++) map.push({ mesoIdx: 4, weekInMeso: i, deload: false });
+    // Deload 5 : semaine 21 (index 20), mesoIdx=4
+    map.push({ mesoIdx: 4, weekInMeso: 0, deload: true });
+    // Phase 6 Pic : semaines 22–24 (index 21–23), mesoIdx=5
+    for (let i = 0; i < 3; i++) map.push({ mesoIdx: 5, weekInMeso: i, deload: false });
+    return map; // 24 entrées (index 0–23)
   },
 
   // Reps assouplies pour deload : prendre la borne basse

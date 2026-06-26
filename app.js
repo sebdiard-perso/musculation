@@ -549,7 +549,7 @@ const app = {
   _upgradePlanWeeks(p) {
     if (!p.isPlan || !p.params || !p.weeks) return;
     // Ne régénérer qu'une fois par version
-    if (p._planVersion >= 39) return;
+    if (p._planVersion >= 40) return;
     const idx = PLANNER.currentWeekIdx(p);
     const params = p.params;
     const newResult = PLANNER.generate(params);
@@ -571,7 +571,7 @@ const app = {
     });
     // Mettre à jour le repos recommandé
     p.restRecommended = newResult.plan.restRecommended;
-    p._planVersion = 39;
+    p._planVersion = 40;
     // S'assurer que les nouveaux exos existent dans le catalogue utilisateur
     const known = new Set(this.exercises.map(e => e.name));
     p.weeks.forEach(w => w.days.forEach(d => d.exercises.forEach(ex => {
@@ -642,7 +642,7 @@ const app = {
     const idx = p.currentWeekIdx ?? 0;
     const w = p.weeks[idx];
     const pct = Math.round(((idx + 1) / 26) * 100);
-    const restNote = p.restRecommended ? `Repos ${p.restRecommended}s` : '';
+    const restNote = (w.restRecommended || p.restRecommended) ? `Repos ${w.restRecommended || p.restRecommended}s` : '';
     const completed = p.completedDays || {};
     const doneCount = w.days.filter((_, i) => completed[`${idx}-${i}`]).length;
     const totalDays = w.days.length;
@@ -931,7 +931,10 @@ const app = {
     if (!prog) return;
     this.syncPlanDays(prog);
     const day = prog.days[di];
-    const defaultRest = prog.restTime || prog.restRecommended || 90;
+    // Repos recommandé : utiliser celui de la semaine courante si disponible
+    const weekIdx = prog.currentWeekIdx ?? 0;
+    const currentWeek = prog.weeks && prog.weeks[weekIdx];
+    const defaultRest = prog.restTime || (currentWeek && currentWeek.restRecommended) || prog.restRecommended || 90;
 
     // Enregistrer le contexte si c'est un plan, pour marquer la complétion à la fin
     if (prog.isPlan) {
