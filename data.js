@@ -216,6 +216,51 @@ const DATA = {
     'Biceps': 1,        // isolation
     'Triceps': 1,       // isolation
     'Mollets': 1,       // isolation
-    'Abdos': 0,         // pas de poids généralement
+    'Abdos': 1,         // isolation — palier utilisé si l'utilisateur ajoute du lest (sinon échelle bodyweightProgression)
+  },
+
+  // Échelle de progression pour exercices au poids du corps.
+  // Utilisée UNIQUEMENT si l'utilisateur n'a pas encore ajouté de charge externe (lastKg === 0
+  // et defaultKg === 0). Dès qu'un poids est saisi, la progression revient au palier kg classique.
+  // L'index courant est stocké sur l'exercice (exo.bwStep, défaut 0).
+  bodyweightProgression: {
+    'Crunch': [
+      { label: 'Crunch classique', tip: 'Enroule le buste 2s, expire à fond, contrôle la descente.' },
+      { label: 'Crunch avec pause 2s en contraction', tip: 'Sur chaque rep, tiens 2s en haut en serrant fort les abdos.' },
+      { label: 'Crunch tempo 3-1-3', tip: 'Montée 3s, pause 1s en haut, descente 3s. Chaque rep dure ~7s.' },
+      { label: 'Crunch bras tendus au-dessus de la tête', tip: 'Bras dans le prolongement du corps → bras de levier +. Ne balance pas les bras.' },
+      { label: 'Crunch lesté (disque ou haltère sur la poitrine)', tip: 'Commence à 2-5 kg. À partir d\'ici, saisis le poids réel → progression classique en kg.', addWeight: true },
+    ],
+    'Relevé de jambes couché': [
+      { label: 'Genoux fléchis (knee raises)', tip: 'Ramène les genoux vers la poitrine. Bas du dos plaqué au sol.' },
+      { label: 'Jambes tendues classique', tip: 'Monte jambes tendues à la verticale, redescend contrôlé. Ne touche pas le sol.' },
+      { label: 'Jambes tendues + tempo lent (descente 4s)', tip: 'Montée 2s, descente 4s. C\'est la négative qui fait mal.' },
+      { label: 'Jambes tendues + frôler le sol en bas', tip: 'Descends jusqu\'à 5 cm du sol sans toucher. Amplitude maximale.' },
+      { label: 'Haltère 2-3 kg entre les pieds', tip: 'Serre bien l\'haltère entre les pieds. Passe en mode lesté : progression classique en kg.', addWeight: true },
+      { label: 'Hanging knee raises (suspendu à la barre)', tip: 'Suspends-toi à la barre, ramène les genoux vers la poitrine. Gaine fort.' },
+      { label: 'Hanging leg raises (jambes tendues suspendu)', tip: 'Suspendu, monte les jambes tendues à l\'horizontale minimum.' },
+      { label: 'Toes to bar', tip: 'Objectif ultime : jambes tendues jusqu\'à toucher la barre avec les orteils.' },
+    ],
+    'Crunch inversé': [
+      { label: 'Crunch inversé classique', tip: 'Enroule le bassin vers le haut, pas les jambes. Descente 3s sans élan.' },
+      { label: 'Avec pause 2s fesses décollées', tip: 'Tiens la position haute 2s sur chaque rep.' },
+      { label: 'Jambes tendues à la verticale', tip: 'Garde les jambes tendues au-dessus, seul le bassin s\'enroule.' },
+      { label: 'Sur banc décliné (tête en bas)', tip: 'Tête vers le bas, agrippe le banc au-dessus de la tête. Beaucoup plus dur.' },
+      { label: 'Lesté (chevillères ou haltère entre les pieds)', tip: 'Ajoute 1-3 kg. Passe en mode lesté : progression classique en kg.', addWeight: true },
+    ],
+    'Gainage planche': [
+      { label: 'Planche classique sur avant-bras', tip: 'Corps aligné, gaine abdos + fessiers. Augmente le temps de 5-10s par semaine.' },
+      { label: 'Planche + lever de bras alternés', tip: 'En position, lève un bras 2s, alterne. Le gainage anti-rotation devient très dur.' },
+      { label: 'Planche + lever de jambe alternés', tip: 'Lève une jambe 2s, alterne. Sollicite énormément les fessiers et le transverse.' },
+      { label: 'Planche + bras + jambe opposés (bird-dog planche)', tip: 'Lève bras droit + jambe gauche simultanément. Tiens 3s, alterne.' },
+      { label: 'Planche lestée (disque sur le dos)', tip: 'Commence à 5 kg posé sur le haut du dos. Passe en mode lesté : progression classique en kg.', addWeight: true },
+    ],
+    'Mountain climber': [
+      { label: 'Cadence modérée', tip: 'Rythme régulier, priorité au gainage. Dos plat, pas de balancement des hanches.' },
+      { label: 'Cadence rapide', tip: 'Explose sur chaque genou. Le gainage doit rester impeccable malgré la vitesse.' },
+      { label: 'Cross-body (genou vers coude opposé)', tip: 'Ramène le genou droit vers le coude gauche et inversement. Sollicite les obliques.' },
+      { label: 'Sur sliders / serviette (glissement)', tip: 'Pieds sur des sliders, glisse au lieu de sauter. Contrôle total + gainage extrême.' },
+      { label: 'Lesté (gilet ou chevillères)', tip: 'Ajoute 2-5 kg via gilet ou chevillères. Passe en mode lesté : progression classique en kg.', addWeight: true },
+    ],
   },
 };

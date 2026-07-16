@@ -1106,8 +1106,26 @@ const app = {
 
   _getExoTips(name) {
     const desc = DATA.descriptions[name];
-    if (!desc || !desc.tips) return '';
-    return `<div class="guided-tips">${desc.tips.split(' · ').map(t => `<span class="guided-tip">${t}</span>`).join('')}</div>`;
+    const bwBadge = this._getBwStepBadge(name);
+    const tipsHtml = (desc && desc.tips)
+      ? `<div class="guided-tips">${desc.tips.split(' · ').map(t => `<span class="guided-tip">${t}</span>`).join('')}</div>`
+      : '';
+    return bwBadge + tipsHtml;
+  },
+
+  _getBwStepBadge(name) {
+    const steps = DATA.bodyweightProgression && DATA.bodyweightProgression[name];
+    if (!steps || !steps.length) return '';
+    const exo = this.exercises.find(e => e.name === name);
+    if (!exo || exo.defaultKg > 0) return ''; // dès qu'il y a un poids, on n'affiche plus l'échelle bodyweight
+    const idx = Math.min(exo.bwStep || 0, steps.length - 1);
+    const step = steps[idx];
+    if (!step) return '';
+    return `<div style="background:#1a1a2e;border:1px solid #4ecca3;border-radius:10px;padding:10px 12px;margin:8px 0;">
+      <div style="color:#4ecca3;font-size:0.85em;font-weight:600;">🎚️ Progression bodyweight — Étape ${idx + 1}/${steps.length}</div>
+      <div style="color:#fff;font-weight:600;margin-top:4px;">${step.label}</div>
+      <div style="color:var(--muted);font-size:0.9em;margin-top:4px;">💡 ${step.tip}</div>
+    </div>`;
   },
 
   // Chronomètre pour exercices isométriques
@@ -1418,9 +1436,27 @@ const app = {
       if (!exo) return;
       const repsArr = we.sets.map(s => s.reps || '').filter(r => r);
       if (repsArr.length) exo.lastReps = repsArr;
-      // Mettre à jour le poids par défaut avec le dernier poids utilisé
+      // Toujours mettre à jour le poids par défaut avec le dernier poids utilisé
+      // C'est la référence pour le calcul des charges dans les semaines à venir
       const lastKg = we.sets.filter(s => s.kg).map(s => parseFloat(s.kg)).pop();
-      if (lastKg && !exo.defaultKg) exo.defaultKg = lastKg;
+      if (lastKg) {
+        // Si le plan indique un RPE cible et que l'exercice a un targetRpe,
+        // on recalcule le defaultKg « à RPE 8 » (référence) à partir du poids réellement utilisé.
+        // Formule inverse de computeTargetKg : defaultKg = lastKg / (repFactor/0.75 * rpeFactor * deloadFactor)
+        const targetRpe = we.targetRpe ? parseInt(we.targetRpe) : null;
+        const isDeload = !!we.deload;
+        if (targetRpe && we.targetReps) {
+          const repF = PLANNER.repFactor(we.targetReps) / 0.75;
+          const rpeF = PLANNER.rpeFactor(targetRpe);
+          const dlF = isDeload ? 0.80 : 1;
+          const factor = repF * rpeF * dlF;
+          const inferredDefault = factor > 0 ? Math.round(lastKg / factor * 2) / 2 : lastKg;
+          if (inferredDefault > 0) exo.defaultKg = inferredDefault;
+        } else {
+          // Pas de RPE cible (programme classique) : le dernier poids devient la référence
+          exo.defaultKg = lastKg;
+        }
+      }
     });
     this.saveExercises();
 
@@ -1456,7 +1492,8 @@ const app = {
 
     const proposals = [];
     lastSession.exercises.forEach(we => {
-      const setsWithData = we.sets.filter(s => s.feeling && s.kg && s.reps);
+      // On garde les séries avec un feeling + des reps. Le kg peut être 0/absent (bodyweight).
+      const setsWithData = we.sets.filter(s => s.feeling && s.reps);
       if (!setsWithData.length) return;
 
       const exo = this.exercises.find(e => e.name === we.name);
@@ -1464,16 +1501,15 @@ const app = {
 
       // Palier selon le groupe musculaire
       const increment = DATA.weightIncrements[exo.muscle] || 1;
-      if (increment === 0) return; // Abdos, pas de proposition
 
       // Ignorer les séries avec technique d'intensification pour la décision
       const normalSets = setsWithData.filter(s => !s.technique);
       const referenceSet = normalSets.length > 0 ? normalSets.at(-1) : setsWithData[0];
       const rpe = parseInt(referenceSet.feeling);
       const repsRealized = parseInt(referenceSet.reps);
-      const lastKg = parseFloat(referenceSet.kg);
+      const lastKg = parseFloat(referenceSet.kg) || 0;
 
-      if (isNaN(rpe) || isNaN(repsRealized) || isNaN(lastKg)) return;
+      if (isNaN(rpe) || isNaN(repsRealized)) return;
 
       // Extraire le haut de la plage de reps
       let maxReps = 10;
@@ -1481,6 +1517,43 @@ const app = {
         const parts = we.targetReps.replace(/\/jambe/, '').split('-');
         maxReps = parseInt(parts[parts.length - 1]) || 10;
       }
+
+      // 🎚️ Progression au poids du corps : si aucun poids n'est utilisé (ni sur cette série,
+      // ni configuré par défaut) et que l'exo possède une échelle de variantes, on propose
+      // le passage à l'étape suivante quand c'est trop facile. Dès que l'utilisateur ajoute
+      // un poids externe, on retombe sur la logique classique en kg — donc on ne propose
+      // plus rien de spécifique (ex. crunch lesté).
+      const bwSteps = DATA.bodyweightProgression && DATA.bodyweightProgression[we.name];
+      const usesBodyweight = lastKg === 0 && !(exo.defaultKg > 0);
+      if (bwSteps && usesBodyweight) {
+        const currentStep = exo.bwStep || 0;
+        const nextStep = currentStep + 1;
+        if (nextStep < bwSteps.length) {
+          let shouldProgress = false;
+          let reason = '';
+          if (we.targetRpe) {
+            const targetRpe = parseInt(we.targetRpe);
+            if (rpe <= targetRpe - 2) {
+              shouldProgress = true;
+              reason = `RPE ${rpe} ressenti vs ${targetRpe} cible → trop facile, passe à la variante plus dure`;
+            }
+          } else if (rpe <= 7 && repsRealized >= maxReps) {
+            shouldProgress = true;
+            reason = `${repsRealized} reps (obj : ${maxReps}) à RPE ${rpe} → prêt pour la variante plus dure`;
+          }
+          if (shouldProgress) {
+            proposals.push({
+              exo, name: we.name, bodyweight: true,
+              currentStep, nextStep, stepData: bwSteps[nextStep],
+              totalSteps: bwSteps.length,
+              rpe, repsRealized, muscle: exo.muscle, reason,
+            });
+          }
+        }
+        return; // pas de suggestion en kg tant qu'on est en bodyweight pur
+      }
+
+      if (increment === 0) return; // sécurité (muscle sans palier défini)
 
       let decision = 'same';
       let newKg = lastKg;
@@ -1522,7 +1595,8 @@ const app = {
 
       proposals.push({
         exo, name: we.name, lastKg, newKg, increment, decision,
-        rpe, repsRealized, maxReps, muscle: exo.muscle, reason
+        rpe, repsRealized, maxReps, muscle: exo.muscle, reason,
+        targetRpe: we.targetRpe, targetReps: we.targetReps, isDeload: !!we.deload
       });
     });
 
@@ -1531,13 +1605,42 @@ const app = {
     const showNext = (i) => {
       if (i >= proposals.length) return;
       const p = proposals[i];
+
+      // 🎚️ Proposition de progression au poids du corps
+      if (p.bodyweight) {
+        const addBadge = p.stepData.addWeight ? '\n\n➕ À partir de cette étape, saisis le poids réel dans les séries : la progression repassera en kg.' : '';
+        this.showModal({
+          icon: '🎚️', title: p.name,
+          msg: `${p.muscle} — progression au poids du corps\n${p.reason}\n\nÉtape ${p.currentStep + 1}/${p.totalSteps} → ${p.nextStep + 1}/${p.totalSteps} :\n« ${p.stepData.label} »\n\n💡 ${p.stepData.tip}${addBadge}`,
+          confirmText: 'Passer à la variante suivante', cancelText: 'Rester à l\'étape actuelle',
+          onConfirm: () => {
+            p.exo.bwStep = p.nextStep;
+            this.saveExercises();
+            showNext(i + 1);
+          }
+        });
+        document.getElementById('modal-custom-cancel').onclick = () => { this.closeCustomModal(); showNext(i + 1); };
+        return;
+      }
+
       const arrow = p.decision === 'up' ? '⬆️' : '⬇️';
       this.showModal({
         icon: arrow, title: p.name,
         msg: `${p.muscle} — palier ${p.increment} kg\n${p.reason}\n\n${p.lastKg} kg → ${p.newKg} kg`,
         confirmText: `Valider ${p.newKg} kg`, cancelText: `Garder ${p.lastKg} kg`,
         onConfirm: () => {
-          p.exo.defaultKg = p.newKg;
+          // Recalculer le defaultKg (référence RPE 8, 8-10 reps) à partir du poids validé
+          // pour que computeTargetKg puisse recalculer correctement les semaines suivantes
+          if (p.targetRpe && p.targetReps) {
+            const targetRpe = parseInt(p.targetRpe);
+            const repF = PLANNER.repFactor(p.targetReps) / 0.75;
+            const rpeF = PLANNER.rpeFactor(targetRpe);
+            const dlF = p.isDeload ? 0.80 : 1;
+            const factor = repF * rpeF * dlF;
+            p.exo.defaultKg = factor > 0 ? Math.round(p.newKg / factor * 2) / 2 : p.newKg;
+          } else {
+            p.exo.defaultKg = p.newKg;
+          }
           this.saveExercises();
           showNext(i + 1);
         }
