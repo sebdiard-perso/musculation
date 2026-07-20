@@ -61,8 +61,8 @@ const PLANNER = {
     const pull = dedup([...p('Dos', 3), ...p('Biceps', 2), ...p('Abdos', 1, 1)]);
     const legs = dedup([...p('Jambes', lb ? 4 : 3), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1), ...p('Abdos', 1, 1)]);
 
-    const upperA = dedup([...p('Pectoraux', 2), ...p('Dos', 2), ...p('Épaules', 1), ...p('Biceps', 1), ...p('Triceps', 1), ...p('Abdos', 1)]);
-    const upperB = dedup([...p('Pectoraux', 2, 1), ...p('Dos', 2, 1), ...p('Épaules', 2, 1), ...p('Biceps', 1, 1), ...p('Triceps', 1, 1), ...p('Abdos', 1, 1)]);
+    const upperA = dedup([...p('Pectoraux', 2), ...p('Dos', 2), ...p('Épaules', 1), ...p('Triceps', 1), ...p('Biceps', 1), ...p('Abdos', 1)]);
+    const upperB = dedup([...p('Pectoraux', 2, 1), ...p('Dos', 2, 1), ...p('Épaules', 2, 1), ...p('Triceps', 1, 1), ...p('Biceps', 1, 1), ...p('Abdos', 1, 1)]);
     const lowerA = dedup([...p('Jambes', lb ? 4 : 3), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1), ...p('Abdos', 1, 1)]);
     const lowerB = dedup([...p('Jambes', lb ? 4 : 3, 1), ...p('Mollets', 1), ...p('Mollets', 1, 1), ...p('Abdos', 1, 1), ...p('Abdos', 1, 2)]);
 
@@ -368,20 +368,45 @@ const PLANNER = {
       const days = dayTemplates.map(t => {
         let exos = t.exos;
 
+        // Helpers partagés : détection abdos + troncage préservant la diversité musculaire.
+        // Principe : quand on doit couper des exos pour respecter un cap, on retire d'abord
+        // les DOUBLONS de muscle (ex : 2ᵉ exo pectoraux) plutôt que de sacrifier un muscle
+        // unique de la fin de la liste (typiquement Triceps ou Biceps).
+        const isAbdo = (name) => {
+          const n = name.toLowerCase();
+          return n.includes('crunch') || n.includes('relevé') || n.includes('releve') || n.includes('gainage') || n.includes('mountain');
+        };
+        const muscleOf = (name) => {
+          const e = cat.find(c => c.name === name);
+          return e ? e.muscle : 'Autre';
+        };
+        const trimPreservingMuscles = (list, targetLen) => {
+          const result = [...list];
+          while (result.length > targetLen) {
+            const counts = {};
+            result.forEach(n => { const m = muscleOf(n); counts[m] = (counts[m] || 0) + 1; });
+            // Chercher, en partant de la fin, un exo dont le muscle a >1 occurrence
+            let dropIdx = -1;
+            for (let i = result.length - 1; i >= 0; i--) {
+              if (counts[muscleOf(result[i])] > 1) { dropIdx = i; break; }
+            }
+            if (dropIdx === -1) break; // tous les muscles n'ont qu'1 exo : on ne peut plus couper sans en perdre un
+            result.splice(dropIdx, 1);
+          }
+          // Fallback si un muscle unique doit sauter (deload très serré) : couper en fin
+          return result.slice(0, targetLen);
+        };
+
         if (goal === 'masse') {
           // Programme Mistral : 6-7 exercices par séance (pas de remplissage)
           // Upper : ~6 exos composés + isolation + abdos intégrés
           // Lower : ~5-6 exos + mollets + abdos/gainage
           const masseMaxExos = deload ? 5 : 7;
           if (exos.length > masseMaxExos) {
-            // Garder les abdos/gainage (max 1) et tronquer le reste
-            const isAbdo = (name) => {
-              const n = name.toLowerCase();
-              return n.includes('crunch') || n.includes('relevé') || n.includes('releve') || n.includes('gainage') || n.includes('mountain');
-            };
             const abdos = exos.filter(isAbdo).slice(0, 1);
             const nonAbdos = exos.filter(n => !isAbdo(n));
-            exos = nonAbdos.slice(0, masseMaxExos - abdos.length).concat(abdos);
+            const trimmed = trimPreservingMuscles(nonAbdos, masseMaxExos - abdos.length);
+            exos = trimmed.concat(abdos);
           }
           // Pas de remplissage automatique pour masse
         } else {
@@ -391,19 +416,13 @@ const PLANNER = {
           const cutExos    = Math.min(maxExos, targetExos + Math.ceil(TOL_SETS / setsAdj));
 
           if (exos.length > cutExos) {
-            const isAbdo = (name) => {
-              const n = name.toLowerCase();
-              return n.includes('crunch') || n.includes('relevé') || n.includes('releve') || n.includes('gainage') || n.includes('mountain');
-            };
             const abdos = exos.filter(isAbdo);
             const nonAbdos = exos.filter(n => !isAbdo(n));
-            exos = nonAbdos.slice(0, Math.max(1, cutExos - abdos.length)).concat(abdos);
+            const trimmed = trimPreservingMuscles(nonAbdos, Math.max(1, cutExos - abdos.length));
+            exos = trimmed.concat(abdos);
           } else if (exos.length < targetExos) {
             const existing = new Set(exos);
-            const muscles = [...new Set(exos.map(name => {
-              const e = cat.find(c => c.name === name);
-              return e ? e.muscle : '';
-            }).filter(Boolean))];
+            const muscles = [...new Set(exos.map(muscleOf).filter(Boolean))];
             for (const m of muscles) {
               if (exos.length >= targetExos) break;
               const extras = cat.filter(c => c.muscle === m && !existing.has(c.name));

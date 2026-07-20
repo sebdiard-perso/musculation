@@ -217,6 +217,39 @@ const app = {
     return 1;
   },
 
+  // Estimation réaliste de la durée d'une séance.
+  // Base : chaque série = exécution (fonction des reps) + repos série (sauf la dernière d'un exo).
+  // Entre exos : repos plus long (transition, matériel, boire). +3 min de setup/échauffement général.
+  // La formule précédente (totalSets*1.5 + exoCount*1.5) sous-estimait d'~35% en ignorant
+  // restRecommended et restBetweenExos.
+  _estimateSessionMinutes(day, week, plan) {
+    const restSec = (week && week.restRecommended) || (plan && plan.restRecommended) || 90;
+    const transSec = (plan && plan.restBetweenExos) || 180;
+    const setupSec = 180;
+    const execSecForReps = (reps) => {
+      if (!reps) return 35;
+      const s = String(reps).replace(/\/jambe/, '');
+      // Isométrique (ex : "30s", "45s")
+      const iso = s.match(/^(\d+)\s*s$/i);
+      if (iso) return parseInt(iso[1], 10);
+      if (s === '21') return 60; // méthode 21
+      const hi = parseInt(s.split('-').pop(), 10) || 10;
+      // ~3.5 s/rep en moyenne (tempo lent 4-5 s, tempo rapide 2.5 s)
+      return Math.round(hi * 3.5);
+    };
+    let totalSec = setupSec;
+    const exos = (day && day.exercises) || [];
+    exos.forEach(ex => {
+      const sets = ex.sets || 0;
+      if (sets <= 0) return;
+      const exec = execSecForReps(ex.reps);
+      totalSec += sets * exec + Math.max(0, sets - 1) * restSec;
+    });
+    // Transitions entre exos
+    totalSec += Math.max(0, exos.length - 1) * transSec;
+    return Math.round(totalSec / 60);
+  },
+
   renderPlanTodayCard() {
     const plan = this.getActivePlan();
     if (!plan) return '';
@@ -283,7 +316,7 @@ const app = {
     const dayCompletedCount = week.days.filter((_, i) => completed[`${next.weekIdx}-${i}`]).length;
     const exoCount = day.exercises.length;
     const totalSets = day.exercises.reduce((s, e) => s + (e.sets || 0), 0);
-    const estMin = Math.round(totalSets * 1.5 + exoCount * 1.5); // estimation grossière
+    const estMin = this._estimateSessionMinutes(day, week, plan);
 
     return `<div class="plan-today-card" onclick="app.launchPlanToday()">
       <div class="ptc-header">
@@ -549,7 +582,7 @@ const app = {
   _upgradePlanWeeks(p) {
     if (!p.isPlan || !p.params || !p.weeks) return;
     // Ne régénérer qu'une fois par version
-    if (p._planVersion >= 40) return;
+    if (p._planVersion >= 41) return;
     const idx = PLANNER.currentWeekIdx(p);
     const params = p.params;
     const newResult = PLANNER.generate(params);
@@ -571,7 +604,7 @@ const app = {
     });
     // Mettre à jour le repos recommandé
     p.restRecommended = newResult.plan.restRecommended;
-    p._planVersion = 40;
+    p._planVersion = 41;
     // S'assurer que les nouveaux exos existent dans le catalogue utilisateur
     const known = new Set(this.exercises.map(e => e.name));
     p.weeks.forEach(w => w.days.forEach(d => d.exercises.forEach(ex => {
