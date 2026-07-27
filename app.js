@@ -1566,13 +1566,22 @@ const app = {
           let reason = '';
           if (we.targetRpe) {
             const targetRpe = parseInt(we.targetRpe);
-            if (rpe <= targetRpe - 2) {
+            // Règle 1 (RPE) : au moins 1 point sous la cible = variante trop facile
+            if (rpe <= targetRpe - 1) {
               shouldProgress = true;
               reason = `RPE ${rpe} ressenti vs ${targetRpe} cible → trop facile, passe à la variante plus dure`;
+            }
+            // Règle 2 (double progression) : haut de la fourchette atteint à RPE ≤ cible
+            else if (repsRealized >= maxReps && rpe <= targetRpe) {
+              shouldProgress = true;
+              reason = `${repsRealized} reps (obj : ${maxReps}) à RPE ${rpe} (cible ${targetRpe}) → prêt pour la variante plus dure`;
             }
           } else if (rpe <= 7 && repsRealized >= maxReps) {
             shouldProgress = true;
             reason = `${repsRealized} reps (obj : ${maxReps}) à RPE ${rpe} → prêt pour la variante plus dure`;
+          } else if (rpe <= 6) {
+            shouldProgress = true;
+            reason = `RPE ${rpe} ressenti → trop facile, passe à la variante plus dure`;
           }
           if (shouldProgress) {
             proposals.push({

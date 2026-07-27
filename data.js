@@ -262,5 +262,14 @@ const DATA = {
       { label: 'Sur sliders / serviette (glissement)', tip: 'Pieds sur des sliders, glisse au lieu de sauter. Contrôle total + gainage extrême.' },
       { label: 'Lesté (gilet ou chevillères)', tip: 'Ajoute 2-5 kg via gilet ou chevillères. Passe en mode lesté : progression classique en kg.', addWeight: true },
     ],
+    'Dips sur banc (triceps)': [
+      { label: 'Pieds au sol, genoux fléchis à 90°', tip: 'Mains sur le bord du banc, pieds à plat près des fesses. Descends jusqu\'à 90° aux coudes, remonte fort.' },
+      { label: 'Pieds au sol, jambes tendues', tip: 'Jambes tendues devant, talons au sol. Plus de charge sur les triceps.' },
+      { label: 'Pieds surélevés (chaise/autre banc)', tip: 'Talons posés sur un support à la même hauteur que le banc des mains. Charge quasi complète.' },
+      { label: 'Pieds surélevés + tempo (descente 3s, pause 1s)', tip: 'Descente 3s contrôlée, pause 1s à 90°, remontée 1-2s. Temps sous tension maximal.' },
+      { label: 'Pieds surélevés + lesté (disque sur les cuisses)', tip: 'Commence à 5 kg posé sur les cuisses. À partir d\'ici, saisis le poids réel → progression classique en kg.', addWeight: true },
+      { label: 'Dips parallèles (barres/chaises)', tip: 'Suspends-toi entre deux appuis, jambes libres. Descends jusqu\'à 90°, remonte. Charge complète.' },
+      { label: 'Dips parallèles lestés', tip: 'Ajoute une ceinture de lest avec disques. Passe en mode lesté : progression classique en kg.', addWeight: true },
+    ],
   },
 };
