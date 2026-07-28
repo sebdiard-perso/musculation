@@ -74,6 +74,23 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
 }
 .ls-stat { font-size: 0.8rem; color: var(--accent); font-weight: 600; }
 
+/* INSIGHTS CARD */
+.insights-card {
+  margin-bottom: 12px;
+}
+.insight-item {
+  background: var(--surface); border-radius: var(--radius); padding: 12px 14px;
+  margin-bottom: 8px; border-left: 4px solid var(--muted);
+}
+.insight-item.insight-warning { border-left-color: var(--warning); }
+.insight-item.insight-alert { border-left-color: var(--accent); }
+.insight-item.insight-success { border-left-color: var(--success); }
+.insight-item.insight-info { border-left-color: #4ea8de; }
+.insight-header { font-size: 0.9rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.insight-icon { font-size: 1.1rem; }
+.insight-msg { font-size: 0.85rem; color: var(--text); margin-bottom: 6px; }
+.insight-tip { font-size: 0.78rem; color: var(--muted); font-style: italic; }
+
 /* QUICK ACTIONS */
 #home-quick-actions {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
@@ -328,6 +345,11 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
 }
 .guided-set-label {
   font-size: 1rem; font-weight: 600; text-align: center; margin-bottom: 4px;
+}
+.warmup-badge {
+  text-align: center; padding: 6px 12px; margin-bottom: 10px;
+  background: rgba(240, 165, 0, 0.15); border: 1px solid var(--warning);
+  border-radius: 8px; font-size: 0.82rem; color: var(--warning); font-weight: 500;
 }
 .guided-set-sub {
   font-size: 0.8rem; color: var(--muted); text-align: center; margin-bottom: 16px;
@@ -817,3 +839,44 @@ h2 { font-size: 1.2rem; margin-bottom: 12px; }
   font-weight: 700; cursor: pointer; min-width: 180px;
 }
 .chrono-btn:active { opacity: 0.8; }
+
+/* PROGRESSION CHARTS */
+.progression-chart { padding: 8px 0; }
+.progression-stats {
+  display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px;
+}
+.prog-stat {
+  text-align: center; background: var(--surface); border-radius: 8px; padding: 10px 6px;
+}
+.prog-stat-val { display: block; font-size: 1.1rem; font-weight: 700; color: var(--text); }
+.prog-stat-label { display: block; font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+.prog-up { color: var(--success) !important; }
+.prog-down { color: var(--accent) !important; }
+.progression-svg-wrap {
+  background: var(--surface); border-radius: var(--radius); padding: 12px; margin-bottom: 12px;
+}
+.progression-detail { margin-bottom: 16px; }
+.prog-info { font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+.progression-history { margin-top: 12px; }
+.progression-history h3 { font-size: 0.9rem; margin-bottom: 8px; }
+.prog-history-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem;
+}
+.prog-h-date { color: var(--muted); min-width: 60px; }
+.prog-h-kg { font-weight: 600; min-width: 55px; }
+.prog-h-reps { color: var(--muted); min-width: 35px; }
+.prog-h-rpe { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); }
+
+/* PROGRESSION OVERVIEW */
+.prog-overview-card {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface); border-radius: var(--radius); padding: 14px 16px;
+  margin-bottom: 10px; cursor: pointer; border: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+.prog-overview-card:active { border-color: var(--accent); }
+.prog-ov-left { flex: 1; min-width: 0; }
+.prog-ov-name { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prog-ov-stats { font-size: 0.78rem; color: var(--muted); margin-top: 3px; }
+.prog-ov-chart { flex-shrink: 0; margin-left: 12px; }

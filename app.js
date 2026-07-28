@@ -98,14 +98,21 @@ const app = {
     const el = document.getElementById('home-greeting');
     if (el) el.textContent = greet;
 
+    // Message contextuel intelligent
+    const subtitle = document.getElementById('home-subtitle');
+    if (subtitle) subtitle.innerHTML = this._buildContextualMessage();
+
     const container = document.getElementById('home-last-session');
     if (!container) return;
 
     // Carte "Aujourd'hui" si un plan est actif (lancement direct en 1 tap)
     const todayCard = this.renderPlanTodayCard();
 
+    // Alertes d'intelligence (stagnation, échecs, progression)
+    const insightsCard = this._buildInsightsCard();
+
     if (!this.history.length) {
-      container.innerHTML = todayCard +
+      container.innerHTML = todayCard + insightsCard +
         `<div class="last-session-card"><div class="ls-title">Bienvenue !</div><div class="ls-summary">Aucune séance enregistrée. Lance-toi ! 🚀</div></div>`;
       return;
     }
@@ -115,12 +122,251 @@ const app = {
     const nbExos = last.exercises.length;
     const nbSets = last.exercises.reduce((s, e) => s + e.sets.length, 0);
     const names = last.exercises.map(e => e.name).slice(0, 3).join(', ');
-    container.innerHTML = todayCard + `<div class="last-session-card" onclick="app.showDetail(${last.id})">
+    container.innerHTML = todayCard + insightsCard + `<div class="last-session-card" onclick="app.showDetail(${last.id})">
       <div class="ls-title">📊 Dernière séance</div>
       <div class="ls-date">${ds}</div>
       <div class="ls-summary">${names}${nbExos > 3 ? '…' : ''}</div>
       <div class="ls-stats"><span class="ls-stat">${nbExos} exos</span><span class="ls-stat">${nbSets} séries</span></div>
     </div>`;
+  },
+
+  // ---------- Message contextuel intelligent ----------
+  _buildContextualMessage() {
+    const plan = this.getActivePlan();
+    if (!plan || !plan.weeks) return 'Prêt à tout donner ? 💪';
+
+    this.syncPlanDays(plan);
+    const weekIdx = plan.currentWeekIdx ?? 0;
+    const week = plan.weeks[weekIdx];
+    const totalWeeks = plan.weeks.length;
+    const pct = Math.round(((weekIdx + 1) / totalWeeks) * 100);
+
+    // Calculer la progression de charge depuis le début du plan
+    const chargeProgress = this._calcChargeProgress(plan);
+
+    // Messages selon la phase
+    if (week.deload) {
+      return '🧘 Semaine de deload — récupère, ton corps se renforce au repos';
+    }
+    if (weekIdx === 0) {
+      return '🎯 Phase d\'adaptation — concentre-toi sur la technique, la charge viendra';
+    }
+    if (pct >= 90) {
+      return `🏆 Dernière ligne droite ! ${pct}% du plan complété${chargeProgress}`;
+    }
+    if (pct >= 50) {
+      return `🔥 Mi-parcours — ${week.phase} · Sem ${weekIdx + 1}/${totalWeeks}${chargeProgress}`;
+    }
+    // Phase en cours avec info progression
+    return `📈 ${week.phase} · Sem ${weekIdx + 1}/${totalWeeks}${chargeProgress}`;
+  },
+
+  _calcChargeProgress(plan) {
+    // Chercher la progression de charge moyenne sur les exercices principaux
+    if (this.history.length < 4) return '';
+    const recent = this.history.slice(0, 5);
+    const older = this.history.slice(-5);
+    if (!older.length) return '';
+
+    let totalGain = 0, count = 0;
+    recent.forEach(session => {
+      session.exercises.forEach(re => {
+        const reKg = re.sets.filter(s => s.kg).map(s => parseFloat(s.kg)).pop();
+        if (!reKg) return;
+        // Trouver le même exo dans les anciennes séances
+        for (const old of older) {
+          const oe = old.exercises.find(e => e.name === re.name);
+          if (oe) {
+            const oldKg = oe.sets.filter(s => s.kg).map(s => parseFloat(s.kg)).pop();
+            if (oldKg && oldKg > 0) {
+              totalGain += ((reKg - oldKg) / oldKg) * 100;
+              count++;
+            }
+            break;
+          }
+        }
+      });
+    });
+    if (count === 0) return '';
+    const avgGain = Math.round(totalGain / count);
+    if (avgGain > 0) return ` · <strong>+${avgGain}%</strong> charge moyenne`;
+    if (avgGain < -5) return ' · ⚠️ charges en baisse';
+    return '';
+  },
+
+  // ---------- Intelligence du programme ----------
+  _buildInsightsCard() {
+    if (this.history.length < 3) return '';
+    const plan = this.getActivePlan();
+
+    const insights = [];
+
+    // 1. Détection de stagnation (même poids depuis 3+ séances)
+    const stagnant = this._detectStagnation();
+    if (stagnant.length) {
+      insights.push({
+        icon: '⚠️',
+        type: 'warning',
+        title: 'Stagnation détectée',
+        msg: `${stagnant.slice(0, 2).map(s => s.name).join(', ')} — même charge depuis ${stagnant[0].weeks} séances`,
+        tip: 'Essaie une variante du mouvement ou augmente le volume (1 série de plus)'
+      });
+    }
+
+    // 2. Détection d'échecs répétés (RPE 10 + reps < cible)
+    const failures = this._detectRepeatedFailures();
+    if (failures.length) {
+      insights.push({
+        icon: '🔻',
+        type: 'alert',
+        title: 'Exercice trop lourd',
+        msg: `${failures[0].name} — échec ${failures[0].count}× d'affilée`,
+        tip: 'Baisse de 5% et remonte progressivement, ou change de variante'
+      });
+    }
+
+    // 3. Progression remarquable
+    const progress = this._detectProgress();
+    if (progress.length && !insights.length) {
+      insights.push({
+        icon: '🚀',
+        type: 'success',
+        title: 'Belle progression !',
+        msg: `${progress[0].name} : +${progress[0].gain}kg en ${progress[0].weeks} semaines`,
+        tip: 'Continue comme ça, la régularité paie'
+      });
+    }
+
+    // 4. Estimation 1RM sur les composés
+    const rm = this._estimate1RM();
+    if (rm.length && insights.length < 2) {
+      insights.push({
+        icon: '🏋️',
+        type: 'info',
+        title: '1RM estimé',
+        msg: rm.slice(0, 3).map(r => `${r.name}: ~${r.rm}kg`).join(' · '),
+        tip: 'Basé sur poids × reps × RPE (formule Epley corrigée)'
+      });
+    }
+
+    if (!insights.length) return '';
+
+    return `<div class="insights-card">
+      ${insights.map(i => `
+        <div class="insight-item insight-${i.type}">
+          <div class="insight-header"><span class="insight-icon">${i.icon}</span> <strong>${i.title}</strong></div>
+          <div class="insight-msg">${i.msg}</div>
+          <div class="insight-tip">💡 ${i.tip}</div>
+        </div>
+      `).join('')}
+    </div>`;
+  },
+
+  _detectStagnation() {
+    // Trouver les exercices dont le poids n'a pas bougé depuis 3+ séances
+    const exoHistory = {};
+    this.history.slice(0, 15).forEach(session => {
+      session.exercises.forEach(e => {
+        const kg = e.sets.filter(s => s.kg).map(s => parseFloat(s.kg)).pop();
+        if (!kg) return;
+        if (!exoHistory[e.name]) exoHistory[e.name] = [];
+        exoHistory[e.name].push(kg);
+      });
+    });
+
+    const stagnant = [];
+    for (const [name, kgs] of Object.entries(exoHistory)) {
+      if (kgs.length < 3) continue;
+      const recent = kgs.slice(0, 3);
+      // Tous les mêmes poids sur les 3 dernières occurrences
+      if (recent.every(k => k === recent[0]) && recent[0] > 0) {
+        stagnant.push({ name, weeks: recent.length, kg: recent[0] });
+      }
+    }
+    return stagnant;
+  },
+
+  _detectRepeatedFailures() {
+    // Exercices avec RPE 10 + reps sous la cible sur 2+ séances consécutives
+    const exoFailures = {};
+    this.history.slice(0, 10).forEach(session => {
+      session.exercises.forEach(e => {
+        const lastSet = e.sets.filter(s => s.feeling && s.reps).pop();
+        if (!lastSet) return;
+        const rpe = parseInt(lastSet.feeling);
+        if (rpe >= 10) {
+          exoFailures[e.name] = (exoFailures[e.name] || 0) + 1;
+        } else {
+          // Reset si une séance était OK
+          if (exoFailures[e.name]) exoFailures[e.name] = 0;
+        }
+      });
+    });
+
+    return Object.entries(exoFailures)
+      .filter(([_, count]) => count >= 2)
+      .map(([name, count]) => ({ name, count }));
+  },
+
+  _detectProgress() {
+    // Exercices avec progression notable sur les dernières semaines
+    const exoHistory = {};
+    this.history.slice(0, 20).forEach(session => {
+      session.exercises.forEach(e => {
+        const kg = e.sets.filter(s => s.kg).map(s => parseFloat(s.kg)).pop();
+        if (!kg) return;
+        if (!exoHistory[e.name]) exoHistory[e.name] = [];
+        exoHistory[e.name].push(kg);
+      });
+    });
+
+    const progress = [];
+    for (const [name, kgs] of Object.entries(exoHistory)) {
+      if (kgs.length < 3) continue;
+      const newest = kgs[0];
+      const oldest = kgs[kgs.length - 1];
+      const gain = newest - oldest;
+      if (gain >= 2.5) {
+        progress.push({ name, gain, weeks: kgs.length });
+      }
+    }
+    return progress.sort((a, b) => b.gain - a.gain);
+  },
+
+  _estimate1RM() {
+    // Estimation du 1RM via formule Epley corrigée par RPE
+    // 1RM = weight × (1 + reps/30) × rpeCorrection
+    const composés = ['Développé couché barre', 'Squat barre', 'Soulevé de terre barre',
+      'Développé militaire barre', 'Développé couché haltères', 'Goblet squat haltère',
+      'Rowing barre buste penché'];
+    const results = [];
+
+    for (const name of composés) {
+      // Chercher la meilleure performance récente
+      for (const session of this.history.slice(0, 10)) {
+        const exo = session.exercises.find(e => e.name === name);
+        if (!exo) continue;
+        const bestSet = exo.sets
+          .filter(s => s.kg && s.reps && parseInt(s.reps) > 0)
+          .sort((a, b) => parseFloat(b.kg) - parseFloat(a.kg))[0];
+        if (!bestSet) continue;
+
+        const kg = parseFloat(bestSet.kg);
+        const reps = parseInt(bestSet.reps);
+        const rpe = parseInt(bestSet.feeling) || 8;
+        if (kg <= 0 || reps <= 0) continue;
+
+        // Epley: 1RM = w × (1 + r/30)
+        // Correction RPE : ajouter les RIR (reps in reserve) aux reps
+        const rir = Math.max(0, 10 - rpe);
+        const effectiveReps = reps + rir;
+        const rm = Math.round(kg * (1 + effectiveReps / 30));
+
+        results.push({ name: name.replace(/ (barre|haltères?|haltère)/, ''), rm });
+        break;
+      }
+    }
+    return results;
   },
 
   // ---------- Plan actif & "Aujourd'hui" ----------
@@ -388,7 +634,7 @@ const app = {
     const navBtn = document.querySelector(`[data-view="${view}"]`);
     if (navBtn) navBtn.classList.add('active');
     // Sous-vues : garder "Plus" actif
-    if (['calendar','exercises','history','settings','spotify','assistant'].includes(view)) {
+    if (['calendar','exercises','history','settings','spotify','assistant','progression'].includes(view)) {
       const moreBtn = document.querySelector('[data-view="more"]');
       if (moreBtn) moreBtn.classList.add('active');
     }
@@ -396,6 +642,7 @@ const app = {
     if (view === 'home') this.renderHome();
     if (view === 'programs') this.renderPrograms();
     if (view === 'calendar') calendar.render(this.history);
+    if (view === 'progression') { document.getElementById('progression-overview').innerHTML = this.renderProgressionOverview(); }
     if (view === 'settings') { this.updateStats(); this.renderSnapshots(); this.showStorageStatus(); }
     if (view === 'assistant') this.renderAssistant();
     if (view === 'spotify') { this.renderSpotify(); }
@@ -471,6 +718,7 @@ const app = {
           ${preview ? `<div class="exo-desc-preview">${preview}</div>` : ''}
         </div>
         <div class="exo-item-actions">
+          <button onclick="app.showProgressionChart('${e.name.replace(/'/g, "\\'")}')" title="Progression">📈</button>
           <button onclick="app.editMode(${e.id})" title="Mode">☝️</button>
           <button onclick="app.editDefaultKg(${e.id})" title="Poids par défaut">⚖️</button>
           <button onclick="app.searchVideo(${e.id})">🔍</button>
@@ -1025,6 +1273,19 @@ const app = {
 
       const defaultReps = pe.reps.includes('-') ? pe.reps.split('-')[1] : pe.reps.replace(/\/jambe/, '');
       const sets = [];
+
+      // Séries d'échauffement progressives (50% et 70% du poids cible)
+      // Pas d'échauffement : deload, abdos, isométriques, ou poids nul
+      const isAbdoOrIso = exo && (exo.muscle === 'Abdos' || exo.muscle === 'Mollets' || exo.isometric);
+      const numKg = parseFloat(kg) || 0;
+      if (!pe.deload && !isAbdoOrIso && numKg > 0) {
+        const warmup1Kg = Math.max(0, Math.round(numKg * 0.50 * 2) / 2);
+        const warmup2Kg = Math.max(0, Math.round(numKg * 0.70 * 2) / 2);
+        const warmupReps = Math.min(10, parseInt(defaultReps) || 10);
+        sets.push({ kg: warmup1Kg, reps: String(warmupReps), feeling: '', technique: '', warmup: true });
+        sets.push({ kg: warmup2Kg, reps: String(warmupReps), feeling: '', technique: '', warmup: true });
+      }
+
       for (let i = 0; i < pe.sets; i++) {
         const isLast = i === pe.sets - 1;
         const savedReps = exo?.lastReps?.[i] || defaultReps;
@@ -1096,7 +1357,8 @@ const app = {
 
     document.getElementById('guided-current-set').innerHTML = `
       ${techBadge}
-      <div class="guided-set-label">Série ${this.guidedSetIndex + 1} / ${totalSets}${rpLabel}${isUni ? ` — <strong>${this.guidedSide === 'right' ? '💪 Droite' : '🤛 Gauche'}</strong>` : ''}${mode === 'alternated' ? ' <span style="color:var(--muted)">(D+G)</span>' : ''}</div>
+      ${set.warmup ? '<div class="warmup-badge">🔥 Échauffement — ne compte pas dans le volume</div>' : ''}
+      <div class="guided-set-label">${set.warmup ? 'Échauffement' : 'Série'} ${this.guidedSetIndex + 1} / ${totalSets}${rpLabel}${isUni ? ` — <strong>${this.guidedSide === 'right' ? '💪 Droite' : '🤛 Gauche'}</strong>` : ''}${mode === 'alternated' ? ' <span style="color:var(--muted)">(D+G)</span>' : ''}</div>
       <div class="guided-set-sub">Exercice ${this.guidedExoIndex + 1} / ${totalExos}</div>
       <div class="guided-inputs">
         ${!isIsometric ? `
@@ -1310,10 +1572,15 @@ const app = {
     }
 
     // Demander le RPE avant de continuer
-    // En deload : pas de question RPE, on auto-remplit à 7 (récupération active)
+    // En deload ou warmup : pas de question RPE
     if (!set.feeling) {
       if (exo.deload) {
         set.feeling = 7;
+        this._continueAfterRpe();
+        return;
+      }
+      if (set.warmup) {
+        set.feeling = 'warmup';
         this._continueAfterRpe();
         return;
       }
@@ -1354,7 +1621,10 @@ const app = {
       timer.onEnd = () => this.hideTimerPopup();
       timer.autoStart(this.restBetweenExos);
     } else {
-      this.showTimerPopup('Repos');
+      // Repos plus court après les séries d'échauffement (45s au lieu du repos normal)
+      const currentSet = exo.sets[this.guidedSetIndex];
+      const isWarmupRest = currentSet && currentSet.warmup;
+      this.showTimerPopup(isWarmupRest ? 'Repos échauffement' : 'Repos');
       timer.onEnd = () => {
         this.hideTimerPopup();
         this.guidedSetIndex++;
@@ -1362,7 +1632,7 @@ const app = {
         this.renderGuided();
         window.scrollTo(0, 0);
       };
-      timer.autoStart(this.restTime);
+      timer.autoStart(isWarmupRest ? 45 : this.restTime);
     }
   },
 
@@ -1466,7 +1736,12 @@ const app = {
   finishWorkout() {
     if (!this.currentWorkout.length) return;
     if (!this.currentWorkout.some(e => e.sets.some(s => s.kg || s.reps))) { alert('Remplis au moins une série !'); return; }
-    this.history.unshift({ id: Date.now(), date: new Date().toISOString(), exercises: JSON.parse(JSON.stringify(this.currentWorkout)) });
+    // Sauvegarder dans l'historique SANS les séries d'échauffement
+    const workoutForHistory = this.currentWorkout.map(exo => ({
+      ...exo,
+      sets: exo.sets.filter(s => !s.warmup)
+    }));
+    this.history.unshift({ id: Date.now(), date: new Date().toISOString(), exercises: JSON.parse(JSON.stringify(workoutForHistory)) });
     this.saveHistory();
 
     // Sauvegarder les reps et poids réalisés sur chaque exercice
@@ -1537,8 +1812,8 @@ const app = {
       // (le poids est volontairement réduit, pas représentatif)
       if (we.deload) return;
 
-      // On garde les séries avec un feeling + des reps. Le kg peut être 0/absent (bodyweight).
-      const setsWithData = we.sets.filter(s => s.feeling && s.reps);
+      // On garde les séries avec un feeling + des reps (exclure warmup).
+      const setsWithData = we.sets.filter(s => s.feeling && s.feeling !== 'warmup' && s.reps && !s.warmup);
       if (!setsWithData.length) return;
 
       const exo = this.exercises.find(e => e.name === we.name);
@@ -1702,6 +1977,197 @@ const app = {
       document.getElementById('modal-custom-cancel').onclick = () => { this.closeCustomModal(); showNext(i + 1); };
     };
     showNext(0);
+  },
+
+  // ---------- PROGRESSION PAR EXERCICE ----------
+  showProgressionChart(name) {
+    const data = this._getExoProgressionData(name);
+    if (!data.length) {
+      this.showModal({ icon: '📈', title: name, msg: 'Pas encore d\'historique pour cet exercice.', confirmText: 'OK', onConfirm: () => {} });
+      return;
+    }
+
+    const exo = this.exercises.find(e => e.name === name);
+    const muscle = exo ? exo.muscle : '';
+
+    // Stats
+    const first = data[data.length - 1];
+    const last = data[0];
+    const maxKg = Math.max(...data.map(d => d.kg));
+    const gain = last.kg - first.kg;
+    const gainPct = first.kg > 0 ? Math.round((gain / first.kg) * 100) : 0;
+
+    // Estimation 1RM sur la meilleure performance
+    const best1RM = Math.max(...data.map(d => {
+      const rir = Math.max(0, 10 - (d.rpe || 8));
+      return Math.round(d.kg * (1 + (d.reps + rir) / 30));
+    }));
+
+    // Générer le SVG
+    const svg = this._buildProgressionSVG(data);
+
+    document.getElementById('desc-title').textContent = `📈 ${name}`;
+    document.getElementById('desc-content').innerHTML = `
+      <div class="progression-chart">
+        <div class="progression-stats">
+          <div class="prog-stat"><span class="prog-stat-val">${last.kg} kg</span><span class="prog-stat-label">Actuel</span></div>
+          <div class="prog-stat"><span class="prog-stat-val ${gain > 0 ? 'prog-up' : gain < 0 ? 'prog-down' : ''}">${gain > 0 ? '+' : ''}${gain} kg</span><span class="prog-stat-label">Progression</span></div>
+          <div class="prog-stat"><span class="prog-stat-val">${gainPct > 0 ? '+' : ''}${gainPct}%</span><span class="prog-stat-label">Évolution</span></div>
+          <div class="prog-stat"><span class="prog-stat-val">${best1RM} kg</span><span class="prog-stat-label">1RM estimé</span></div>
+        </div>
+        <div class="progression-svg-wrap">${svg}</div>
+        <div class="progression-detail">
+          <div class="prog-info">🏋️ ${muscle} · ${data.length} séances · Max : ${maxKg} kg</div>
+          <div class="prog-info">📅 ${first.dateLabel} → ${last.dateLabel}</div>
+        </div>
+        <div class="progression-history">
+          <h3>Dernières séances</h3>
+          ${data.slice(0, 10).map(d => `
+            <div class="prog-history-row">
+              <span class="prog-h-date">${d.dateLabel}</span>
+              <span class="prog-h-kg">${d.kg} kg</span>
+              <span class="prog-h-reps">×${d.reps}</span>
+              ${d.rpe ? `<span class="prog-h-rpe rpe-${d.rpe}">RPE ${d.rpe}</span>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    document.getElementById('modal-exo-desc').classList.remove('hidden');
+  },
+
+  _getExoProgressionData(name) {
+    const data = [];
+    for (const session of this.history) {
+      const exo = session.exercises.find(e => e.name === name);
+      if (!exo) continue;
+      // Prendre le set le plus lourd de la séance (hors warmup)
+      const validSets = exo.sets.filter(s => s.kg && parseFloat(s.kg) > 0 && !s.warmup);
+      if (!validSets.length) continue;
+      const best = validSets.sort((a, b) => parseFloat(b.kg) - parseFloat(a.kg))[0];
+      const d = new Date(session.date);
+      data.push({
+        date: d,
+        dateLabel: d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        kg: parseFloat(best.kg),
+        reps: parseInt(best.reps) || 0,
+        rpe: parseInt(best.feeling) || null
+      });
+    }
+    return data; // Plus récent en premier
+  },
+
+  _buildProgressionSVG(data) {
+    if (data.length < 2) {
+      return `<div style="text-align:center;color:var(--muted);padding:20px;">Pas assez de données pour tracer un graphe (min 2 séances)</div>`;
+    }
+
+    const W = 320, H = 160, PAD = 30;
+    const pts = [...data].reverse(); // chronologique (ancien → récent)
+    const kgs = pts.map(d => d.kg);
+    const minKg = Math.min(...kgs) - 2.5;
+    const maxKg = Math.max(...kgs) + 2.5;
+    const rangeKg = maxKg - minKg || 1;
+
+    const xStep = (W - PAD * 2) / (pts.length - 1);
+    const toX = (i) => PAD + i * xStep;
+    const toY = (kg) => H - PAD - ((kg - minKg) / rangeKg) * (H - PAD * 2);
+
+    // Points du graphe
+    const points = pts.map((d, i) => `${toX(i)},${toY(d.kg)}`).join(' ');
+
+    // Aire sous la courbe (gradient)
+    const areaPoints = `${toX(0)},${H - PAD} ${points} ${toX(pts.length - 1)},${H - PAD}`;
+
+    // Lignes de grille horizontales
+    const gridLines = [];
+    const gridStep = rangeKg > 20 ? 10 : rangeKg > 10 ? 5 : 2.5;
+    for (let kg = Math.ceil(minKg / gridStep) * gridStep; kg <= maxKg; kg += gridStep) {
+      const y = toY(kg);
+      gridLines.push(`<line x1="${PAD}" y1="${y}" x2="${W - PAD}" y2="${y}" stroke="#333" stroke-width="0.5"/>`);
+      gridLines.push(`<text x="${PAD - 4}" y="${y + 4}" fill="#888" font-size="9" text-anchor="end">${kg}</text>`);
+    }
+
+    // Labels dates (premier et dernier)
+    const dateLabels = `
+      <text x="${PAD}" y="${H - 8}" fill="#888" font-size="9" text-anchor="start">${pts[0].dateLabel}</text>
+      <text x="${W - PAD}" y="${H - 8}" fill="#888" font-size="9" text-anchor="end">${pts[pts.length - 1].dateLabel}</text>
+    `;
+
+    // Points individuels
+    const dots = pts.map((d, i) => {
+      const color = i === pts.length - 1 ? '#4ecca3' : '#e94560';
+      return `<circle cx="${toX(i)}" cy="${toY(d.kg)}" r="4" fill="${color}" stroke="#1a1a2e" stroke-width="2"/>`;
+    }).join('');
+
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:200px;">
+      <defs>
+        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#4ecca3" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="#4ecca3" stop-opacity="0.02"/>
+        </linearGradient>
+      </defs>
+      ${gridLines.join('')}
+      <polygon points="${areaPoints}" fill="url(#areaGrad)"/>
+      <polyline points="${points}" fill="none" stroke="#4ecca3" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      ${dots}
+      ${dateLabels}
+    </svg>`;
+  },
+
+  // Vue globale des progressions (accessible depuis le menu "Plus")
+  renderProgressionOverview() {
+    const composés = ['Développé couché barre', 'Squat barre', 'Soulevé de terre barre',
+      'Développé militaire barre', 'Développé couché haltères', 'Goblet squat haltère',
+      'Rowing barre buste penché', 'Développé incliné haltères', 'Soulevé de terre roumain haltères',
+      'Fentes bulgares haltères', 'Curl biceps haltères', 'Hip Thrust haltère'];
+
+    // Trouver les exercices qui ont de l'historique
+    const withData = this.exercises
+      .filter(e => this._getExoProgressionData(e.name).length >= 2)
+      .sort((a, b) => {
+        const idxA = composés.indexOf(a.name);
+        const idxB = composés.indexOf(b.name);
+        if (idxA >= 0 && idxB >= 0) return idxA - idxB;
+        if (idxA >= 0) return -1;
+        if (idxB >= 0) return 1;
+        return 0;
+      });
+
+    if (!withData.length) {
+      return '<p style="color:var(--muted);text-align:center;padding:20px;">Pas encore assez d\'historique. Fais quelques séances et reviens ici !</p>';
+    }
+
+    return withData.map(e => {
+      const data = this._getExoProgressionData(e.name);
+      const first = data[data.length - 1];
+      const last = data[0];
+      const gain = last.kg - first.kg;
+      const miniSvg = this._buildMiniSparkline(data);
+      return `<div class="prog-overview-card" onclick="app.showProgressionChart('${e.name.replace(/'/g, "\\'")}')">
+        <div class="prog-ov-left">
+          <div class="prog-ov-name">${e.name}</div>
+          <div class="prog-ov-stats">${last.kg} kg · ${data.length} séances · <span class="${gain > 0 ? 'prog-up' : gain < 0 ? 'prog-down' : ''}">${gain > 0 ? '+' : ''}${gain} kg</span></div>
+        </div>
+        <div class="prog-ov-chart">${miniSvg}</div>
+      </div>`;
+    }).join('');
+  },
+
+  _buildMiniSparkline(data) {
+    if (data.length < 2) return '';
+    const W = 80, H = 32;
+    const pts = [...data].reverse();
+    const kgs = pts.map(d => d.kg);
+    const minKg = Math.min(...kgs);
+    const maxKg = Math.max(...kgs);
+    const range = maxKg - minKg || 1;
+    const xStep = W / (pts.length - 1);
+    const points = pts.map((d, i) => `${i * xStep},${H - ((d.kg - minKg) / range) * (H - 4) - 2}`).join(' ');
+    const color = kgs[kgs.length - 1] >= kgs[0] ? '#4ecca3' : '#e94560';
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:80px;height:32px;">
+      <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+    </svg>`;
   },
 
   // HISTORY
