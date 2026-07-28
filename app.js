@@ -1310,7 +1310,13 @@ const app = {
     }
 
     // Demander le RPE avant de continuer
+    // En deload : pas de question RPE, on auto-remplit à 7 (récupération active)
     if (!set.feeling) {
+      if (exo.deload) {
+        set.feeling = 7;
+        this._continueAfterRpe();
+        return;
+      }
       this.showRpeModal(() => this._continueAfterRpe(), exo.targetRpe);
       return;
     }
@@ -1469,6 +1475,10 @@ const app = {
       if (!exo) return;
       const repsArr = we.sets.map(s => s.reps || '').filter(r => r);
       if (repsArr.length) exo.lastReps = repsArr;
+
+      // En deload : ne pas mettre à jour defaultKg (poids volontairement réduit)
+      if (we.deload) return;
+
       // Toujours mettre à jour le poids par défaut avec le dernier poids utilisé
       // C'est la référence pour le calcul des charges dans les semaines à venir
       const lastKg = we.sets.filter(s => s.kg).map(s => parseFloat(s.kg)).pop();
@@ -1477,12 +1487,10 @@ const app = {
         // on recalcule le defaultKg « à RPE 8 » (référence) à partir du poids réellement utilisé.
         // Formule inverse de computeTargetKg : defaultKg = lastKg / (repFactor/0.75 * rpeFactor * deloadFactor)
         const targetRpe = we.targetRpe ? parseInt(we.targetRpe) : null;
-        const isDeload = !!we.deload;
         if (targetRpe && we.targetReps) {
           const repF = PLANNER.repFactor(we.targetReps) / 0.75;
           const rpeF = PLANNER.rpeFactor(targetRpe);
-          const dlF = isDeload ? 0.80 : 1;
-          const factor = repF * rpeF * dlF;
+          const factor = repF * rpeF;
           const inferredDefault = factor > 0 ? Math.round(lastKg / factor * 2) / 2 : lastKg;
           if (inferredDefault > 0) exo.defaultKg = inferredDefault;
         } else {
@@ -1525,6 +1533,10 @@ const app = {
 
     const proposals = [];
     lastSession.exercises.forEach(we => {
+      // Ne pas proposer d'ajustement sur les séances de deload
+      // (le poids est volontairement réduit, pas représentatif)
+      if (we.deload) return;
+
       // On garde les séries avec un feeling + des reps. Le kg peut être 0/absent (bodyweight).
       const setsWithData = we.sets.filter(s => s.feeling && s.reps);
       if (!setsWithData.length) return;
