@@ -263,13 +263,14 @@ const app = {
   },
 
   _detectStagnation() {
-    // Trouver les exercices dont le poids n'a pas bougé depuis longtemps
-    // On exclut les séances de deload et on ne signale que si le RPE montre
-    // que la charge aurait pu monter (RPE ≤ cible = marge disponible)
+    // Trouver les exercices dont le poids n'a pas bougé sur une longue période
+    // Le programme masse prescrit souvent la même charge pendant une phase entière
+    // (3-4 semaines = 6-8 occurrences d'un exo). On ne signale une stagnation
+    // que si le poids est identique sur 10+ séances non-deload (= plus d'une phase)
+    // ET que le RPE montre que la charge aurait pu monter.
     const exoHistory = {};
-    this.history.slice(0, 20).forEach(session => {
+    this.history.slice(0, 30).forEach(session => {
       session.exercises.forEach(e => {
-        // Exclure les séances de deload
         if (e.deload) return;
         const validSets = e.sets.filter(s => s.kg && parseFloat(s.kg) > 0 && !s.warmup);
         if (!validSets.length) return;
@@ -283,15 +284,14 @@ const app = {
 
     const stagnant = [];
     for (const [name, entries] of Object.entries(exoHistory)) {
-      if (entries.length < 4) continue; // minimum 4 séances non-deload
-      const recent = entries.slice(0, 4);
-      // Tous les mêmes poids sur les 4 dernières occurrences
+      if (entries.length < 10) continue; // minimum ~5 semaines d'historique
+      const recent = entries.slice(0, 10);
+      // Tous les mêmes poids sur les 10 dernières occurrences
       if (!recent.every(e => e.kg === recent[0].kg)) continue;
-      // Vérifier que le RPE n'est pas au plafond (sinon c'est normal de ne pas monter)
-      // Si RPE moyen ≤ 8, la charge aurait pu être augmentée → stagnation réelle
+      // Si RPE toujours ≥ 9 → pas de marge, c'est normal de ne pas monter
       const rpesWithData = recent.filter(e => e.rpe).map(e => e.rpe);
-      if (rpesWithData.length && rpesWithData.every(r => r >= 9)) continue; // RPE trop haut = normal
-      stagnant.push({ name, weeks: recent.length, kg: recent[0].kg });
+      if (rpesWithData.length >= 3 && rpesWithData.every(r => r >= 9)) continue;
+      stagnant.push({ name, weeks: Math.round(recent.length / 2), kg: recent[0].kg });
     }
     return stagnant;
   },
