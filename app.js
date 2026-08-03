@@ -1,3 +1,25 @@
+// Jeu d'icônes SVG (trait, hérite de la couleur du parent via currentColor).
+// Remplace les emojis sur l'accueil pour un rendu plus sobre et cohérent.
+const ICONS = (() => {
+  const svg = (body, extra = '') => `<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${body}</svg>`;
+  return {
+    calendarCheck: svg('<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4"/>'),
+    dumbbell: svg('<rect x="2.2" y="9" width="3.2" height="6" rx="1.3"/><rect x="5.6" y="6.8" width="3.4" height="10.4" rx="1.5"/><rect x="15" y="6.8" width="3.4" height="10.4" rx="1.5"/><rect x="18.6" y="9" width="3.2" height="6" rx="1.3"/><path d="M9 12h6"/>'),
+    chart: svg('<path d="M3 20h18M7.5 20v-6M12 20V7.5M16.5 20v-9"/>'),
+    moon: svg('<path d="M20.5 14.2A8.4 8.4 0 0 1 9.8 3.5a8.9 8.9 0 1 0 10.7 10.7Z"/>'),
+    trophy: svg('<path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M17 5h3v1.5a3.5 3.5 0 0 1-3.5 3.5M7 5H4v1.5A3.5 3.5 0 0 0 7.5 10"/><path d="M12 14v3M8.5 20.5h7M9.5 20.5l.4-3h4.2l.4 3"/>'),
+    play: svg('<path d="M8 5.4 19 12 8 18.6V5.4Z" fill="currentColor" stroke-width="1.6"/>'),
+    chevron: svg('<path d="m9.5 6 6 6-6 6"/>'),
+    sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/>'),
+    sunrise: svg('<path d="M12 3v3M5.6 8.6 7.1 10.1M18.4 8.6 16.9 10.1M2.5 16.5h3.5M18 16.5h3.5M8 16.5a4 4 0 0 1 8 0M3 20.5h18"/>'),
+    alert: svg('<path d="M12 3.6 21.5 20h-19L12 3.6Z"/><path d="M12 10v4M12 17.1v.1"/>'),
+    trendDown: svg('<path d="M3 7.5 9.5 14l4-4L21 17.5"/><path d="M21 12.5v5h-5"/>'),
+    trendUp: svg('<path d="M3 16.5 9.5 10l4 4L21 6.5"/><path d="M16 6.5h5v5"/>'),
+    target: svg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>'),
+    settings: svg('<circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.03Z"/>'),
+  };
+})();
+
 const app = {
   exercises: JSON.parse(localStorage.getItem('exercises') || '[]'),
   history: JSON.parse(localStorage.getItem('history') || '[]'),
@@ -94,13 +116,19 @@ const app = {
 
   renderHome() {
     const h = new Date().getHours();
-    const greet = h < 12 ? 'Bonjour ☀️' : h < 18 ? 'Bon après-midi 💪' : 'Bonsoir 🌙';
+    const greeting = h < 12
+      ? { icon: ICONS.sunrise, text: 'Bonjour' }
+      : h < 18
+        ? { icon: ICONS.sun, text: 'Bon après-midi' }
+        : { icon: ICONS.moon, text: 'Bonsoir' };
     const el = document.getElementById('home-greeting');
-    if (el) el.textContent = greet;
+    if (el) el.innerHTML = `<span class="greet-icon">${greeting.icon}</span><span>${greeting.text}</span>`;
 
     // Message contextuel intelligent
     const subtitle = document.getElementById('home-subtitle');
     if (subtitle) subtitle.innerHTML = this._buildContextualMessage();
+
+    this.renderQuickActions();
 
     const container = document.getElementById('home-last-session');
     if (!container) return;
@@ -113,7 +141,10 @@ const app = {
 
     if (!this.history.length) {
       container.innerHTML = todayCard + insightsCard +
-        `<div class="last-session-card"><div class="ls-title">Bienvenue !</div><div class="ls-summary">Aucune séance enregistrée. Lance-toi ! 🚀</div></div>`;
+        `<div class="last-session-card last-session-card--empty">
+          <div class="ls-head"><span class="ls-icon">${ICONS.dumbbell}</span><span class="ls-title">Bienvenue</span></div>
+          <div class="ls-summary">Aucune séance enregistrée pour l'instant. Choisis un programme ou compose ta séance, on s'occupe du reste.</div>
+        </div>`;
       return;
     }
     const last = this.history[0];
@@ -123,17 +154,46 @@ const app = {
     const nbSets = last.exercises.reduce((s, e) => s + e.sets.length, 0);
     const names = last.exercises.map(e => e.name).slice(0, 3).join(', ');
     container.innerHTML = todayCard + insightsCard + `<div class="last-session-card" onclick="app.showDetail(${last.id})">
-      <div class="ls-title">📊 Dernière séance</div>
+      <div class="ls-head"><span class="ls-icon">${ICONS.chart}</span><span class="ls-title">Dernière séance</span><span class="ls-chevron">${ICONS.chevron}</span></div>
       <div class="ls-date">${ds}</div>
       <div class="ls-summary">${names}${nbExos > 3 ? '…' : ''}</div>
       <div class="ls-stats"><span class="ls-stat">${nbExos} exos</span><span class="ls-stat">${nbSets} séries</span></div>
     </div>`;
   },
 
+  // Actions principales de l'accueil : deux lignes larges et explicites
+  // (plus lisibles et accueillantes que des tuiles à emoji).
+  renderQuickActions() {
+    const el = document.getElementById('home-quick-actions');
+    if (!el) return;
+    const hasPlan = !!this.getActivePlan();
+    const programTitle = hasPlan ? 'Mes programmes' : 'Choisir un programme';
+    const programDesc = hasPlan
+      ? 'Mon plan, mes semaines et les séances à venir'
+      : 'Séances guidées, charges et progression calculées pour toi';
+    el.innerHTML = `
+      <button class="action-row action-row--program" onclick="app.goTo('programs')">
+        <span class="ar-icon">${ICONS.calendarCheck}</span>
+        <span class="ar-text">
+          <span class="ar-title">${programTitle}</span>
+          <span class="ar-desc">${programDesc}</span>
+        </span>
+        <span class="ar-chevron">${ICONS.chevron}</span>
+      </button>
+      <button class="action-row action-row--free" onclick="app.showExercisePicker()">
+        <span class="ar-icon">${ICONS.dumbbell}</span>
+        <span class="ar-text">
+          <span class="ar-title">Séance à la carte</span>
+          <span class="ar-desc">Je compose mon entraînement exercice par exercice</span>
+        </span>
+        <span class="ar-chevron">${ICONS.chevron}</span>
+      </button>`;
+  },
+
   // ---------- Message contextuel intelligent ----------
   _buildContextualMessage() {
     const plan = this.getActivePlan();
-    if (!plan || !plan.weeks) return 'Prêt à tout donner ? 💪';
+    if (!plan || !plan.weeks) return 'Prêt à tout donner ? Choisis ta séance ci-dessous.';
 
     this.syncPlanDays(plan);
     const weekIdx = plan.currentWeekIdx ?? 0;
@@ -146,19 +206,19 @@ const app = {
 
     // Messages selon la phase
     if (week.deload) {
-      return '🧘 Semaine de deload — récupère, ton corps se renforce au repos';
+      return 'Semaine de deload — récupère, ton corps se renforce au repos';
     }
     if (weekIdx === 0) {
-      return '🎯 Phase d\'adaptation — concentre-toi sur la technique, la charge viendra';
+      return 'Phase d\'adaptation — concentre-toi sur la technique, la charge viendra';
     }
     if (pct >= 90) {
-      return `🏆 Dernière ligne droite ! ${pct}% du plan complété${chargeProgress}`;
+      return `Dernière ligne droite ! ${pct}% du plan complété${chargeProgress}`;
     }
     if (pct >= 50) {
-      return `🔥 Mi-parcours — ${week.phase} · Sem ${weekIdx + 1}/${totalWeeks}${chargeProgress}`;
+      return `Mi-parcours — ${week.phase} · Sem ${weekIdx + 1}/${totalWeeks}${chargeProgress}`;
     }
     // Phase en cours avec info progression
-    return `📈 ${week.phase} · Sem ${weekIdx + 1}/${totalWeeks}${chargeProgress}`;
+    return `${week.phase} · Sem ${weekIdx + 1}/${totalWeeks}${chargeProgress}`;
   },
 
   _calcChargeProgress(plan) {
@@ -190,7 +250,7 @@ const app = {
     if (count === 0) return '';
     const avgGain = Math.round(totalGain / count);
     if (avgGain > 0) return ` · <strong>+${avgGain}%</strong> charge moyenne`;
-    if (avgGain < -5) return ' · ⚠️ charges en baisse';
+    if (avgGain < -5) return ' · charges en baisse';
     return '';
   },
 
@@ -205,7 +265,7 @@ const app = {
     const stagnant = this._detectStagnation();
     if (stagnant.length) {
       insights.push({
-        icon: '⚠️',
+        icon: ICONS.alert,
         type: 'warning',
         title: 'Stagnation détectée',
         msg: `${stagnant.slice(0, 2).map(s => s.name).join(', ')} — même charge depuis ${stagnant[0].weeks} séances`,
@@ -217,7 +277,7 @@ const app = {
     const failures = this._detectRepeatedFailures();
     if (failures.length) {
       insights.push({
-        icon: '🔻',
+        icon: ICONS.trendDown,
         type: 'alert',
         title: 'Exercice trop lourd',
         msg: `${failures[0].name} — échec ${failures[0].count}× d'affilée`,
@@ -229,7 +289,7 @@ const app = {
     const progress = this._detectProgress();
     if (progress.length && !insights.length) {
       insights.push({
-        icon: '🚀',
+        icon: ICONS.trendUp,
         type: 'success',
         title: 'Belle progression !',
         msg: `${progress[0].name} : +${progress[0].gain}kg en ${progress[0].weeks} semaines`,
@@ -241,7 +301,7 @@ const app = {
     const rm = this._estimate1RM();
     if (rm.length && insights.length < 2) {
       insights.push({
-        icon: '🏋️',
+        icon: ICONS.dumbbell,
         type: 'info',
         title: '1RM estimé',
         msg: rm.slice(0, 3).map(r => `${r.name}: ~${r.rm}kg`).join(' · '),
@@ -256,7 +316,7 @@ const app = {
         <div class="insight-item insight-${i.type}">
           <div class="insight-header"><span class="insight-icon">${i.icon}</span> <strong>${i.title}</strong></div>
           <div class="insight-msg">${i.msg}</div>
-          <div class="insight-tip">💡 ${i.tip}</div>
+          <div class="insight-tip">${i.tip}</div>
         </div>
       `).join('')}
     </div>`;
@@ -480,7 +540,8 @@ const app = {
   // restRecommended et restBetweenExos.
   _estimateSessionMinutes(day, week, plan) {
     const restSec = (week && week.restRecommended) || (plan && plan.restRecommended) || 90;
-    const transSec = (plan && plan.restBetweenExos) || 180;
+    // Sans valeur imposée, le repos inter-exercices est adaptatif (~70 à 180 s) : moyenne ~130 s.
+    const transSec = (plan && plan.restBetweenExos) || 130;
     const setupSec = 180;
     const execSecForReps = (reps) => {
       if (!reps) return 35;
@@ -515,19 +576,19 @@ const app = {
     // Vérifier si c'est un jour de repos
     if (this.isRestDay(plan)) {
       const frequency = plan.params?.frequency || 4;
-      let restMsg = 'Ton corps récupère et se renforce 💤';
+      let restMsg = 'Ton corps récupère et se renforce.';
       if (frequency <= 3) restMsg = 'Avec ' + frequency + ' séances/sem, repose-toi entre chaque entraînement.';
       else restMsg = 'Après plusieurs jours consécutifs, accorde-toi un jour de récupération.';
 
       return `<div class="plan-today-card plan-today-rest">
         <div class="ptc-header">
-          <div class="ptc-emoji">😴</div>
+          <div class="ptc-icon">${ICONS.moon}</div>
           <div class="ptc-text">
             <div class="ptc-title">Jour de repos</div>
             <div class="ptc-subtitle">${restMsg}</div>
           </div>
         </div>
-        <div class="ptc-info">🔋 Récupération · 💧 Hydratation · 🥗 Nutrition · 😴 Sommeil</div>
+        <div class="ptc-info">Récupération · Hydratation · Nutrition · Sommeil</div>
       </div>`;
     }
 
@@ -544,10 +605,10 @@ const app = {
           // Vraiment tout terminé (fin du plan)
           return `<div class="plan-today-card plan-today-done">
             <div class="ptc-header">
-              <div class="ptc-emoji">🏆</div>
+              <div class="ptc-icon">${ICONS.trophy}</div>
               <div class="ptc-text">
                 <div class="ptc-title">Plan terminé !</div>
-                <div class="ptc-subtitle">Félicitations, tu as fini les 26 semaines 🎉</div>
+                <div class="ptc-subtitle">Félicitations, tu as fini les 26 semaines</div>
               </div>
             </div>
           </div>`;
@@ -556,10 +617,10 @@ const app = {
         // Semaine 26 finie = plan complet
         return `<div class="plan-today-card plan-today-done">
           <div class="ptc-header">
-            <div class="ptc-emoji">🏆</div>
+            <div class="ptc-icon">${ICONS.trophy}</div>
             <div class="ptc-text">
               <div class="ptc-title">Plan terminé !</div>
-              <div class="ptc-subtitle">Félicitations, 26 semaines complétées 🎉</div>
+              <div class="ptc-subtitle">Félicitations, 26 semaines complétées</div>
             </div>
           </div>
         </div>`;
@@ -576,20 +637,21 @@ const app = {
 
     return `<div class="plan-today-card" onclick="app.launchPlanToday()">
       <div class="ptc-header">
-        <div class="ptc-emoji">🚀</div>
+        <div class="ptc-icon">${ICONS.calendarCheck}</div>
         <div class="ptc-text">
-          <div class="ptc-title">Aujourd'hui — ${day.name}</div>
+          <div class="ptc-eyebrow">Au programme aujourd'hui</div>
+          <div class="ptc-title">${day.name}</div>
           <div class="ptc-subtitle">${plan.name.replace('🧠 ', '')}</div>
         </div>
       </div>
       <div class="ptc-meta">
         <span class="ptc-tag">Sem ${next.weekIdx + 1}/26</span>
         <span class="ptc-tag">${week.phase}</span>
-        <span class="ptc-tag rpe-target-badge rpe-${week.rpe}">🎯 RPE ${week.rpe}</span>
-        ${week.deload ? '<span class="ptc-tag deload-badge">🔻 Deload</span>' : ''}
+        <span class="ptc-tag rpe-target-badge rpe-${week.rpe}">RPE ${week.rpe}</span>
+        ${week.deload ? '<span class="ptc-tag deload-badge">Deload</span>' : ''}
       </div>
       <div class="ptc-info">${exoCount} exos · ${totalSets} séries · ~${estMin} min · jour ${dayCompletedCount + 1}/${week.days.length} de la semaine</div>
-      <button class="ptc-launch-btn" onclick="event.stopPropagation();app.launchPlanToday()">🚀 Lancer maintenant</button>
+      <button class="ptc-launch-btn" onclick="event.stopPropagation();app.launchPlanToday()">${ICONS.play}<span>Commencer ma séance</span></button>
     </div>`;
   },
 
@@ -631,6 +693,11 @@ const app = {
   },
 
   setupNav() {
+    // Injecte les icônes SVG déclarées via data-icon (nav, etc.)
+    document.querySelectorAll('[data-icon]').forEach(el => {
+      const ico = ICONS[el.dataset.icon];
+      if (ico) el.innerHTML = ico;
+    });
     document.querySelectorAll('.nav-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         this.goTo(btn.dataset.view);
@@ -1132,7 +1199,7 @@ const app = {
 
     document.getElementById('desc-title').textContent = p.name ? 'Modifier programme' : 'Nouveau programme';
     const restVal = p.restTime || 90;
-    const restExosVal = p.restBetweenExos || 180;
+    const restExosVal = p.restBetweenExos || '';
     document.getElementById('desc-content').innerHTML = `
       <div class="editor-form">
         <input type="text" id="editor-name" value="${p.name}" placeholder="Nom du programme" class="editor-input-big">
@@ -1142,7 +1209,8 @@ const app = {
             <input type="number" id="editor-rest" value="${restVal}" min="10" max="600" step="5" style="width:70px;margin-left:4px;"> s
           </label>
           <label style="flex:1;min-width:140px;">⏱️ Repos exos
-            <input type="number" id="editor-rest-exos" value="${restExosVal}" min="10" max="900" step="5" style="width:70px;margin-left:4px;"> s
+            <input type="number" id="editor-rest-exos" value="${restExosVal}" min="10" max="900" step="5" placeholder="auto" style="width:70px;margin-left:4px;"> s
+            <span style="display:block;font-size:0.72rem;color:var(--muted);margin-top:2px;">Vide = adapté automatiquement</span>
           </label>
         </div>
         <div id="editor-days">${renderDays()}</div>
@@ -1192,7 +1260,10 @@ const app = {
     const restEl = document.getElementById('editor-rest');
     const restExosEl = document.getElementById('editor-rest-exos');
     if (restEl) p.restTime = parseInt(restEl.value) || 90;
-    if (restExosEl) p.restBetweenExos = parseInt(restExosEl.value) || 180;
+    if (restExosEl) {
+      const v = parseInt(restExosEl.value);
+      p.restBetweenExos = v > 0 ? v : null; // vide => repos adaptatif
+    }
     if (!p.name) { alert('Donne un nom au programme'); return; }
     if (!p.days.some(d => d.exercises.some(e => e.name))) { alert('Ajoute au moins un exercice'); return; }
     // Nettoyer les exercices vides
@@ -1215,6 +1286,7 @@ const app = {
   guidedSide: null, // null, 'right', 'left' pour unilatéral
   restTime: 90,
   restBetweenExos: 180,
+  restExosFixed: null,
   restPauseCount: 0,
 
   startProgramDay(pid, di) {
@@ -1241,6 +1313,8 @@ const app = {
       confirmText: 'C\'est parti 🚀',
       onConfirm: (val) => {
         this.restTime = parseInt(val) || defaultRest;
+        // null => repos inter-exercices adaptatif ; valeur => imposée par le programme
+        this.restExosFixed = prog.restBetweenExos || null;
         this.restBetweenExos = prog.restBetweenExos || 180;
         this._launchDay(day);
       }
@@ -1369,7 +1443,7 @@ const app = {
       ${techBadge}
       ${set.warmup ? '<div class="warmup-badge">🔥 Échauffement — ne compte pas dans le volume</div>' : ''}
       <div class="guided-set-label">${set.warmup ? 'Échauffement' : 'Série'} ${this.guidedSetIndex + 1} / ${totalSets}${rpLabel}${isUni ? ` — <strong>${this.guidedSide === 'right' ? '💪 Droite' : '🤛 Gauche'}</strong>` : ''}${mode === 'alternated' ? ' <span style="color:var(--muted)">(D+G)</span>' : ''}</div>
-      <div class="guided-set-sub">Exercice ${this.guidedExoIndex + 1} / ${totalExos}</div>
+      <div class="guided-set-sub">Exercice ${this.guidedExoIndex + 1} / ${totalExos} · ${this._remainingText()}</div>
       <div class="guided-inputs">
         ${!isIsometric ? `
         <div class="guided-input-group">
@@ -1555,6 +1629,81 @@ const app = {
     }
   },
 
+  // ---- Repos inter-exercices adaptatif ---------------------------------
+  // Le facteur limitant n'est pas le même selon les exercices :
+  //  - même muscle       -> récupération locale nécessaire (2 min 30)
+  //  - polyarticulaire lourd -> fatigue systémique (jusqu'à 3 min)
+  //  - groupe différent  -> simple transition (1 min à 1 min 30)
+  _muscleGroup(muscle) {
+    const m = (muscle || '').toLowerCase();
+    if (/pector|épaule|epaule|deltoï|deltoi|triceps/.test(m)) return 'push';
+    if (/dos|dorsaux|dorsal|trapèze|trapeze|biceps|lombaire|rhomboï/.test(m)) return 'pull';
+    if (/quadri|ischio|fessier|mollet|jambe|cuisse|adducteur/.test(m)) return 'legs';
+    if (/abdo|gainage|oblique|transverse|psoas/.test(m)) return 'core';
+    return 'other';
+  },
+
+  _isCompound(name) {
+    return /squat|soulev|fente|développé|developpe|rowing|hip thrust|dips|traction|pompe|tirage/i.test(name || '');
+  },
+
+  _isBarbell(name) {
+    const exo = this.exercises.find(e => e.name === name);
+    if (exo && exo.mode === 'barbell') return true;
+    return /barre/i.test(name || '');
+  },
+
+  _isSystemic(name) {
+    return /squat barre|soulevé de terre barre|souleve de terre barre/i.test(name || '');
+  },
+
+  _adaptiveRestExos(prev, next) {
+    if (!prev || !next) return { sec: 120, why: '' };
+
+    const sameMuscle = !!(prev.muscle && next.muscle && prev.muscle === next.muscle);
+    const gPrev = this._muscleGroup(prev.muscle);
+    const gNext = this._muscleGroup(next.muscle);
+    const sameGroup = gPrev === gNext && gPrev !== 'other';
+    const compound = this._isCompound(prev.name) || this._isCompound(next.name);
+    const barbell = this._isBarbell(prev.name) || this._isBarbell(next.name);
+    const systemic = this._isSystemic(prev.name);
+
+    let sec, why;
+    if (sameMuscle) { sec = 150; why = 'même muscle sollicité'; }
+    else if (sameGroup) { sec = 100; why = 'même groupe musculaire'; }
+    else { sec = 70; why = 'groupe musculaire différent'; }
+
+    if (compound && sec < 90) { sec = 90; why += ' · polyarticulaire'; }
+    if (barbell && sec < 120) { sec = 120; why += ' · charge lourde'; }
+    if (systemic && sec < 180) { sec = 180; why = 'fatigue générale après ' + prev.name; }
+
+    return { sec, why };
+  },
+
+  _formatRest(sec) {
+    if (sec < 60) return `${sec} s`;
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return s ? `${m} min ${s}` : `${m} min`;
+  },
+
+  // Texte "il reste N exercices / M séries" pour la séance guidée  // includeCurrent = true : l'exercice/série en cours n'a pas encore été effectué
+  _remainingText(includeCurrent = false) {
+    const total = this.currentWorkout.length;
+    const exosLeft = total - this.guidedExoIndex - (includeCurrent ? 0 : 1);
+    let setsLeft = 0;
+    this.currentWorkout.forEach((e, i) => {
+      if (i > this.guidedExoIndex) setsLeft += e.sets.length;
+      else if (i === this.guidedExoIndex) setsLeft += Math.max(0, e.sets.length - this.guidedSetIndex - (includeCurrent ? 0 : 1));
+    });
+    const exoPart = exosLeft <= 0
+      ? 'Dernier exercice'
+      : (exosLeft === 1 && includeCurrent ? 'Dernier exercice' : `Encore ${exosLeft} exercice${exosLeft > 1 ? 's' : ''}`);
+    const setPart = setsLeft <= 1
+      ? `${setsLeft} série restante`
+      : `${setsLeft} séries restantes`;
+    return `${exoPart} · ${setPart}`;
+  },
+
   guidedNext() {
     const exo = this.currentWorkout[this.guidedExoIndex];
     const set = exo.sets[this.guidedSetIndex];
@@ -1623,18 +1772,41 @@ const app = {
       const nextExo = this.currentWorkout[this.guidedExoIndex];
       const nextKg = nextExo.sets[0]?.kg || '';
       const desc = DATA.descriptions[nextExo.name];
-      const kgHtml = nextKg ? `<div class="next-exo-kg">⚖️ ${nextKg} kg</div>` : '';
-      const descHtml = desc
-        ? `<div class="next-exo-preview"><div class="next-exo-title">Prochain : ${nextExo.name}</div>${kgHtml}<div class="next-exo-muscles">${desc.muscles}</div></div>`
-        : `<div class="next-exo-preview"><div class="next-exo-title">Prochain : ${nextExo.name}</div>${kgHtml}</div>`;
+      const kgHtml = nextKg ? `<div class="next-exo-kg">${nextKg} kg</div>` : '';
+      const setsHtml = `<div class="next-exo-sets">${nextExo.sets.length} série${nextExo.sets.length > 1 ? 's' : ''}${nextExo.targetReps ? ` · ${nextExo.targetReps} reps` : ''}</div>`;
+      const execHtml = desc && desc.exec
+        ? `<div class="next-exo-exec"><div class="next-exo-sub">Exécution</div>${desc.exec}</div>` : '';
+      const tipsHtml = desc && desc.tips
+        ? `<div class="next-exo-tips">${desc.tips.split(' · ').map(t => `<span class="guided-tip">${t}</span>`).join('')}</div>` : '';
+
+      // repos adaptatif (sauf si le programme impose une valeur fixe)
+      const adapt = this._adaptiveRestExos(exo, nextExo);
+      const restSec = this.restExosFixed || adapt.sec;
+      const restNote = this.restExosFixed
+        ? `<div class="next-exo-rest">Repos ${this._formatRest(restSec)}</div>`
+        : `<div class="next-exo-rest">Repos adapté · <strong>${this._formatRest(restSec)}</strong><span>${adapt.why}</span></div>`;
+      const descHtml = `
+        <div class="next-exo-preview">
+          <div class="next-exo-label">Prochain exercice</div>
+          <div class="next-exo-anim">${ANIMATIONS.get(nextExo.name)}</div>
+          <div class="next-exo-title">${nextExo.name}</div>
+          ${desc ? `<div class="next-exo-muscles">${desc.muscles}</div>` : ''}
+          ${kgHtml}
+          ${setsHtml}
+          ${restNote}
+          <div class="next-exo-remaining">${this._remainingText(true)}</div>
+          ${execHtml}
+          ${tipsHtml}
+        </div>`;
       this.showTimerPopup('Repos entre exercices', descHtml);
       timer.onEnd = () => this.hideTimerPopup();
-      timer.autoStart(this.restBetweenExos);
+      timer.autoStart(restSec);
     } else {
       // Repos plus court après les séries d'échauffement (45s au lieu du repos normal)
       const currentSet = exo.sets[this.guidedSetIndex];
       const isWarmupRest = currentSet && currentSet.warmup;
-      this.showTimerPopup(isWarmupRest ? 'Repos échauffement' : 'Repos');
+      this.showTimerPopup(isWarmupRest ? 'Repos échauffement' : 'Repos',
+        `<div class="rest-remaining">${this._remainingText()}</div>`);
       timer.onEnd = () => {
         this.hideTimerPopup();
         this.guidedSetIndex++;

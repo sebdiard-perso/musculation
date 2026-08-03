@@ -40,9 +40,9 @@
 
   <!-- NAV -->
   <nav id="nav">
-    <button class="nav-btn active" data-view="workout">🏋️ Séance</button>
-    <button class="nav-btn" data-view="programs">📅 Programmes</button>
-    <button class="nav-btn" data-view="more">⚙️ Plus</button>
+    <button class="nav-btn active" data-view="workout"><span class="nav-icon" data-icon="dumbbell"></span><span>Séance</span></button>
+    <button class="nav-btn" data-view="programs"><span class="nav-icon" data-icon="calendarCheck"></span><span>Programmes</span></button>
+    <button class="nav-btn" data-view="more"><span class="nav-icon" data-icon="settings"></span><span>Plus</span></button>
   </nav>
 
   <!-- VUE SÉANCE -->
@@ -52,23 +52,14 @@
       <!-- HERO HEADER -->
       <div id="home-hero">
         <div id="home-greeting"></div>
-        <div id="home-subtitle">Prêt à tout donner ? 💪</div>
+        <div id="home-subtitle">Prêt à tout donner ?</div>
       </div>
 
       <!-- DERNIÈRE SÉANCE -->
       <div id="home-last-session"></div>
 
-      <!-- ACTIONS RAPIDES -->
-      <div id="home-quick-actions">
-        <button class="quick-action-card" onclick="app.goTo('programs')">
-          <span class="qa-icon">🚀</span>
-          <span class="qa-label">Lancer un programme</span>
-        </button>
-        <button class="quick-action-card" onclick="app.showExercisePicker()">
-          <span class="qa-icon">🏋️</span>
-          <span class="qa-label">Séance libre</span>
-        </button>
-      </div>
+      <!-- ACTIONS RAPIDES (rendues par app.renderQuickActions) -->
+      <div id="home-quick-actions"></div>
     </div>
 
     <!-- Mode séance libre en cours -->
