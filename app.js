@@ -844,7 +844,7 @@ const app = {
 
   showExoDesc(name) {
     const desc = DATA.descriptions[name];
-    const anim = ANIMATIONS.get(name);
+    const anim = ANIMATIONS.get(name, { label: name });
     document.getElementById('desc-title').textContent = name;
     document.getElementById('desc-content').innerHTML =
       `<div style="text-align:center;margin-bottom:16px;background:#1a1a2e;border-radius:12px;padding:16px;">${anim}</div>` +
@@ -1420,7 +1420,14 @@ const app = {
     }).join('');
 
     // Animation
-    document.getElementById('guided-animation').innerHTML = ANIMATIONS.get(exo.name);
+    // Le côté travaillé et la technique influencent réellement l'animation
+    // (figure miroir pour la série gauche, tempo ralenti en négatif, etc.).
+    document.getElementById('guided-animation').innerHTML = ANIMATIONS.get(exo.name, {
+      label: exo.name,
+      side: isUni ? this.guidedSide : null,
+      mode,
+      technique: set.technique,
+    });
 
     // Nom + muscle
     document.getElementById('guided-exo-name').textContent = exo.name;
@@ -1785,10 +1792,16 @@ const app = {
       const restNote = this.restExosFixed
         ? `<div class="next-exo-rest">Repos ${this._formatRest(restSec)}</div>`
         : `<div class="next-exo-rest">Repos adapté · <strong>${this._formatRest(restSec)}</strong><span>${adapt.why}</span></div>`;
+      const nextExoData = this.exercises.find(e => e.name === nextExo.name);
+      const nextAnim = ANIMATIONS.get(nextExo.name, {
+        label: nextExo.name,
+        mode: nextExoData?.mode || 'bilateral',
+        technique: nextExo.sets[0]?.technique,
+      });
       const descHtml = `
         <div class="next-exo-preview">
           <div class="next-exo-label">Prochain exercice</div>
-          <div class="next-exo-anim">${ANIMATIONS.get(nextExo.name)}</div>
+          <div class="next-exo-anim">${nextAnim}</div>
           <div class="next-exo-title">${nextExo.name}</div>
           ${desc ? `<div class="next-exo-muscles">${desc.muscles}</div>` : ''}
           ${kgHtml}

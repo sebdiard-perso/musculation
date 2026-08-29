@@ -2,13 +2,21 @@
    ANIMATIONS — figures anatomiques articulées
    -------------------------------------------------------------------------
    Chaque exercice est décrit par 2 (ou 3) POSES.
-   Une pose = les positions ECRAN des articulations : hip, sh, hd, el, wr,
-   kn, an, toe (+ variantes "F" pour les membres du côté opposé).
+   Une pose = les directions voulues des articulations : hip, sh, hd, el, wr,
+   kn, an, toe (+ variantes "F" pour les membres du côté opposé), plus
+   éventuellement "scapula" (élévation de l'épaule).
+
    Le moteur :
-     - déduit la direction de chaque os (atan2 entre parent et enfant)
-     - impose une longueur d'os constante (le squelette reste cohérent)
-     - émet des groupes SVG animés translate(origine) + rotate(angle)
-   Repère local d'un os : +x = vers l'articulation enfant, +y = face ventrale.
+     1. échantillonne le mouvement en images intermédiaires, en interpolant
+        chaque articulation autour de son parent (interpolation polaire) :
+        un coude ou un genou ne peut donc jamais traverser son parent ;
+     2. résout le squelette image par image en imposant des longueurs d'os
+        constantes (cinématique directe) ;
+     3. dessine chaque membre comme un tracé animé dont les extrémités SONT
+        les articulations résolues. Parent et enfant partagent exactement les
+        mêmes coordonnées : aucune articulation ne peut se désolidariser.
+
+   Repère local (tête, mains, pieds) : +x = vers l'extrémité, +y = ventral.
    ========================================================================= */
 
 const ANIMATIONS = {
@@ -26,8 +34,10 @@ const ANIMATIONS = {
     floor: '#2b3247',
   },
 
-  // longueurs d'os (px)
-  L: { torso: 34, head: 14, arm: 24, fore: 22, thigh: 30, shin: 29, foot: 13 },
+  // Longueurs d'os (px). Le rapport jambe/tronc (56/34 ≈ 1,65) et la stature
+  // d'environ 7,4 têtes correspondent à une morphologie adulte ; les jambes
+  // d'origine (59 px) enfonçaient les pieds sous le sol des décors.
+  L: { torso: 34, head: 14, arm: 24, fore: 22, thigh: 29, shin: 27, foot: 13 },
 
   // ---------------------------------------------------------------- outils
   _r(v) { return Math.round(v * 10) / 10; },
@@ -40,15 +50,29 @@ const ANIMATIONS = {
   },
 
   // cinématique directe : positions imposées par les longueurs d'os
-  _solve(p) {
+  _solve(p, def = {}) {
     const L = this.L, A = this._ang.bind(this), S = this._step.bind(this);
     const g = (k, fb) => p[k] || fb;
 
-    const hip = p.hip;
-    const aTorso = A(hip, p.sh);
-    const sh = S(hip, aTorso, L.torso);
-    const aNeck = A(p.sh, g('hd', [p.sh[0], p.sh[1] - 14]));
-    const hd = S(sh, aNeck, L.head);
+    // Point d'ancrage du tronc. Par défaut le bassin porte la figure ; pour un
+    // hip thrust c'est le haut du dos qui reste calé sur le banc.
+    const aTorso = A(p.hip, p.sh);
+    let hip, torsoSh;
+    if (def.torsoAnchor === 'shoulder') {
+      torsoSh = p.sh;
+      hip = S(torsoSh, aTorso + 180, L.torso);
+    } else {
+      hip = p.hip;
+      torsoSh = S(hip, aTorso, L.torso);
+    }
+    // La ceinture scapulaire peut s'élever seule (shrug) : le bassin et les
+    // jambes ne doivent pas monter avec les épaules.
+    const sh = p.scapula ? [torsoSh[0], torsoSh[1] - p.scapula] : torsoSh;
+
+    // Le crâne est positionné depuis le tronc, pas depuis l'épaule : quand les
+    // épaules montent (shrug), la tête reste en place et le cou se tasse.
+    const aNeck = A(p.sh, g('hd', [p.sh[0], p.sh[1] - L.head]));
+    const hd = S(torsoSh, aNeck, L.head);
 
     const aArm = A(p.sh, p.el);
     const el = S(sh, aArm, L.arm);
@@ -69,18 +93,20 @@ const ANIMATIONS = {
     const aFoot = A(p.an, toeA);
     const toe = S(an, aFoot, L.foot);
 
-    const knFa = g('knF', p.kn), anFa = g('anF', p.an), toeFa = g('toeF', toeA);
+    const knFa = g('knF', p.kn), anFa = g('anF', p.an);
     const aThighF = A(hip, knFa);
     const knF = S(hip, aThighF, L.thigh);
     const aShinF = A(knFa, anFa);
     const anF = S(knF, aShinF, L.shin);
-    const aFootF = A(anFa, toeFa);
+    // Sans consigne explicite, le pied éloigné copie l'orientation du pied
+    // proche : il ne peut plus pivoter brutalement d'un demi-tour.
+    const aFootF = p.toeF ? A(anFa, p.toeF) : aFoot;
     const toeF = S(anF, aFootF, L.foot);
 
     return {
-      pos: { hip, sh, hd, el, wr, elF, wrF, kn, an, toe, knF, anF, toeF },
+      pos: { hip, torsoSh, sh, hd, el, wr, elF, wrF, kn, an, toe, knF, anF, toeF },
       ang: {
-        torso: aTorso, neck: aNeck, arm: aArm, fore: aFore, armF: aArmF,
+        torso: A(hip, torsoSh), neck: A(sh, hd), arm: aArm, fore: aFore, armF: aArmF,
         foreF: aForeF, thigh: aThigh, shin: aShin, foot: aFoot,
         thighF: aThighF, shinF: aShinF, footF: aFootF,
       },
@@ -99,48 +125,163 @@ const ANIMATIONS = {
     return out;
   },
 
-  _splines(n) { return Array(n).fill('0.42 0 0.58 1').join(';'); },
+  // ------------------------------------------------- échantillonnage du geste
 
-  // os animé : <g translate><g rotate>…contenu local…</g></g>
-  _bone(frames, posKey, angKey, dur, content) {
-    const tr = frames.map(f => `${this._r(f.pos[posKey][0])},${this._r(f.pos[posKey][1])}`).join(';');
+  // accélération/décélération douce, sans rebond
+  _ease(t) {
+    const x = Math.max(0, Math.min(1, t));
+    return x * x * (3 - 2 * x);
+  },
+
+  // interpolation d'angles par le plus court chemin
+  _mixAngle(a, b, t) {
+    let end = b;
+    while (end - a > 180) end -= 360;
+    while (end - a < -180) end += 360;
+    return a + (end - a) * t;
+  },
+
+  // Chaînes parent → enfant du squelette, de la racine vers les extrémités.
+  _CHAINS: [
+    ['hd', 'sh'],
+    ['el', 'sh'], ['wr', 'el'], ['elF', 'sh'], ['wrF', 'elF'],
+    ['kn', 'hip'], ['an', 'kn'], ['toe', 'an'],
+    ['knF', 'hip'], ['anF', 'knF'], ['toeF', 'anF'],
+  ],
+
+  // Interpole deux poses. Les segments tournent autour de leur articulation
+  // parente au lieu de glisser en ligne droite : les angles restent
+  // anatomiques pendant tout le trajet, sans passage à travers le parent.
+  _mixPose(a, b, t) {
+    const out = {};
+    new Set([...Object.keys(a), ...Object.keys(b)]).forEach(key => {
+      const av = a[key], bv = b[key];
+      if (Array.isArray(av) && Array.isArray(bv)) out[key] = av.map((v, i) => v + ((bv[i] ?? v) - v) * t);
+      else if (typeof av === 'number' && typeof bv === 'number') out[key] = av + (bv - av) * t;
+      else out[key] = t < 0.5 ? (av ?? bv) : (bv ?? av);
+    });
+
+    this._CHAINS.forEach(([child, parent]) => {
+      if (!a[child] || !b[child] || !a[parent] || !b[parent] || !out[parent]) return;
+      const angle = this._mixAngle(this._ang(a[parent], a[child]), this._ang(b[parent], b[child]), t);
+      const lenA = Math.hypot(a[child][0] - a[parent][0], a[child][1] - a[parent][1]);
+      const lenB = Math.hypot(b[child][0] - b[parent][0], b[child][1] - b[parent][1]);
+      out[child] = this._step(out[parent], angle, lenA + (lenB - lenA) * t);
+    });
+    return out;
+  },
+
+  // Tempo d'une répétition réelle : appui de départ, concentrique, courte
+  // contraction en fin de course, excentrique plus lente, puis stabilisation.
+  _PHASES: [
+    [0.00, 0.08, 0, 0],   // position de départ tenue
+    [0.08, 0.36, 0, 1],   // concentrique
+    [0.36, 0.48, 1, 1],   // contraction / verrouillage
+    [0.48, 0.90, 1, 0],   // excentrique, plus longue
+    [0.90, 1.00, 0, 0],   // retour au calme avant la rep suivante
+  ],
+
+  // Gestes alternés (un côté puis l'autre) : les deux sens ont la même durée,
+  // il n'y a pas d'excentrique privilégiée.
+  _PHASES_ALT: [
+    [0.00, 0.06, 0, 0],
+    [0.06, 0.44, 0, 1],
+    [0.44, 0.56, 1, 1],
+    [0.56, 0.94, 1, 0],
+    [0.94, 1.00, 0, 0],
+  ],
+
+  _frames(def) {
+    // Un exercice isométrique ne doit pas bouger du tout.
+    if (def.static) return [this._solve(def.poses[0], def)];
+
+    const poses = def.poses;
+    const count = 37;
+    const frames = [];
+    for (let i = 0; i < count; i++) {
+      const t = i / (count - 1);
+      let pose;
+      if (poses.length === 2) {
+        const table = def.alternate ? this._PHASES_ALT : this._PHASES;
+        const phase = table.find(([, to]) => t < to) || table[table.length - 1];
+        const [from, to, a, b] = phase;
+        const local = to === from ? 0 : (t - from) / (to - from);
+        pose = a === b ? poses[a] : this._mixPose(poses[a], poses[b], this._ease(local));
+      } else {
+        const cycle = poses.concat(poses.slice(0, -1).reverse());
+        const scaled = t * (cycle.length - 1);
+        const index = Math.min(cycle.length - 2, Math.floor(scaled));
+        pose = this._mixPose(cycle[index], cycle[index + 1], this._ease(scaled - index));
+      }
+      frames.push(this._solve(pose, def));
+    }
+    return frames;
+  },
+
+  // Les techniques du programme changent réellement la vitesse du geste.
+  _duration(def, technique) {
+    const factor = { negative: 1.6, tempo: 1.7, 'iso-hold': 1.35, peak: 1.25, partial: 0.85 }[technique] || 1;
+    return this._r((def.dur || 3) * factor);
+  },
+
+  // ------------------------------------------------------------ rendu animé
+
+  // Tracé d'un os, de l'articulation parente vers l'enfant. `portion` permet
+  // de ne couvrir qu'une partie de l'os (manche, cuissard).
+  _boneD(frame, from, to, portion = 1) {
+    const a = frame.pos[from], b = frame.pos[to];
+    const x = a[0] + (b[0] - a[0]) * portion;
+    const y = a[1] + (b[1] - a[1]) * portion;
+    return `M${this._r(a[0])},${this._r(a[1])} L${this._r(x)},${this._r(y)}`;
+  },
+
+  // Tracé dont la géométrie est animée image par image.
+  _morph(frames, makeD, dur, attrs) {
+    const values = frames.map(makeD);
+    const anim = frames.length === 1 ? ''
+      : `<animate attributeName="d" values="${values.join(';')}" calcMode="linear" dur="${dur}s" repeatCount="indefinite"/>`;
+    return `<path d="${values[0]}" ${attrs}>${anim}</path>`;
+  },
+
+  // Membre : contour + chair, plus éventuellement un vêtement sur le haut de
+  // l'os. Les deux extrémités sont exactement les articulations résolues.
+  _limb(frames, from, to, dur, width, far, garment, cover = 0.42) {
+    const c = this._c;
+    const d = f => this._boneD(f, from, to);
+    let out = this._morph(frames, d, dur, `fill="none" stroke="${c.line}" stroke-width="${this._r(width + 2.2)}" stroke-linecap="round"`) +
+      this._morph(frames, d, dur, `fill="none" stroke="${far ? c.skinFar : c.skin}" stroke-width="${this._r(width)}" stroke-linecap="round"`);
+    if (garment) {
+      const cloth = garment === 'short' ? (far ? c.shortFar : c.short) : (far ? c.shirtFar : c.shirt);
+      const dressed = f => this._boneD(f, from, to, cover);
+      out += this._morph(frames, dressed, dur, `fill="none" stroke="${c.line}" stroke-width="${this._r(width + 2.6)}" stroke-linecap="round"`) +
+        this._morph(frames, dressed, dur, `fill="none" stroke="${cloth}" stroke-width="${this._r(width + 0.6)}" stroke-linecap="round"`);
+    }
+    return out;
+  },
+
+  // Élément rigide (main, pied, tête, matériel) placé sur une articulation et
+  // orienté par l'os correspondant.
+  _attach(frames, posKey, angKey, dur, content) {
+    const first = frames[0];
+    const at = f => [this._r(f.pos[posKey][0]), this._r(f.pos[posKey][1])];
+    if (frames.length === 1) {
+      const [x, y] = at(first);
+      const rot = angKey ? ` rotate(${this._r(-first.ang[angKey])})` : '';
+      return `<g transform="translate(${x} ${y})${rot}">${content}</g>`;
+    }
+    const tr = frames.map(f => at(f).join(',')).join(';');
+    const move = `<animateTransform attributeName="transform" type="translate" values="${tr}" calcMode="linear" dur="${dur}s" repeatCount="indefinite" additive="sum"/>`;
+    if (!angKey) return `<g>${move}${content}</g>`;
     const rt = this._unwrap(frames.map(f => -f.ang[angKey])).map(v => this._r(v)).join(';');
-    const n = frames.length - 1;
-    const sp = this._splines(n);
-    const kt = frames.map((_, i) => this._r(i / n)).join(';');
-    return `<g><animateTransform attributeName="transform" type="translate" values="${tr}" keyTimes="${kt}" calcMode="spline" keySplines="${sp}" dur="${dur}s" repeatCount="indefinite" additive="sum"/>` +
-      `<g><animateTransform attributeName="transform" type="rotate" values="${rt}" keyTimes="${kt}" calcMode="spline" keySplines="${sp}" dur="${dur}s" repeatCount="indefinite" additive="sum"/>` +
-      content + `</g></g>`;
+    return `<g>${move}<g><animateTransform attributeName="transform" type="rotate" values="${rt}" calcMode="linear" dur="${dur}s" repeatCount="indefinite" additive="sum"/>${content}</g></g>`;
   },
 
   // point fixe animé (sans rotation) : suit une articulation
   _track(frames, posKey, dur, content) {
-    const tr = frames.map(f => `${this._r(f.pos[posKey][0])},${this._r(f.pos[posKey][1])}`).join(';');
-    const n = frames.length - 1;
-    const kt = frames.map((_, i) => this._r(i / n)).join(';');
-    return `<g><animateTransform attributeName="transform" type="translate" values="${tr}" keyTimes="${kt}" calcMode="spline" keySplines="${this._splines(n)}" dur="${dur}s" repeatCount="indefinite" additive="sum"/>${content}</g>`;
+    return this._attach(frames, posKey, null, dur, content);
   },
 
   // ------------------------------------------------------------ morphologie
-  // membre : trait épais à bouts ronds (contour + chair), léger galbe
-  _seg(len, w0, w1, far) {
-    const c = this._c;
-    const fill = far ? c.skinFar : c.skin;
-    const mid = len * 0.52;
-    return `<path d="M0,0 L${this._r(mid)},0" stroke="${c.line}" stroke-width="${w0 + 2.6}" stroke-linecap="round" fill="none"/>` +
-      `<path d="M${this._r(len * 0.46)},0 L${this._r(len)},0" stroke="${c.line}" stroke-width="${w1 + 2.6}" stroke-linecap="round" fill="none"/>` +
-      `<path d="M0,0 L${this._r(mid)},0" stroke="${fill}" stroke-width="${w0}" stroke-linecap="round" fill="none"/>` +
-      `<path d="M${this._r(len * 0.46)},0 L${this._r(len)},0" stroke="${fill}" stroke-width="${w1}" stroke-linecap="round" fill="none"/>`;
-  },
-
-  // segment habillé (manche / cuissard)
-  _segDressed(len, w0, w1, far, color, colorFar, cover) {
-    const c = this._c;
-    return this._seg(len, w0, w1, far) +
-      `<path d="M0,0 L${this._r(len * cover)},0" stroke="${c.line}" stroke-width="${w0 + 2.6}" stroke-linecap="round" fill="none"/>` +
-      `<path d="M0,0 L${this._r(len * cover)},0" stroke="${far ? colorFar : color}" stroke-width="${w0 + 0.6}" stroke-linecap="round" fill="none"/>`;
-  },
-
   _torso(far) {
     const c = this._c, L = this.L.torso;
     const back = -1, front = 1; // +y = ventral
@@ -160,22 +301,21 @@ const ANIMATIONS = {
          fill="none" stroke="${c.shirtSh}" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/>`;
   },
 
-  // tête : +x = axe du cou vers le crâne, +y = face
-  _head() {
-    const c = this._c, H = this.L.head;
-    return `<g transform="translate(${H},0)">` +
-      // cou
-      `<path d="M${-H + 2},0 L-1,0" stroke="${c.line}" stroke-width="9.4" stroke-linecap="round"/>` +
-      `<path d="M${-H + 2},0 L-1,0" stroke="${c.skinSh}" stroke-width="6.8" stroke-linecap="round"/>` +
+  // Crâne, placé sur l'articulation "hd" et orienté par l'axe du cou.
+  // +x = vers le sommet du crâne, +y = face.
+  // L'échelle 0,8 ramène la stature à ~7,5 têtes (contre ~6 auparavant).
+  _skull() {
+    const c = this._c;
+    return `<g transform="scale(0.8)">` +
       // crâne (légèrement ovale, front vers +y)
-      `<ellipse cx="0" cy="1" rx="9.4" ry="8.4" fill="${c.skin}" stroke="${c.line}" stroke-width="1.8"/>` +
+      `<ellipse cx="0" cy="1" rx="9.4" ry="8.4" fill="${c.skin}" stroke="${c.line}" stroke-width="2.1"/>` +
       // cheveux à l'arrière (-y) et sur le dessus (+x)
       `<path d="M-9.2,-2 A9.4,8.4 0 0 1 4,-7.6 L4,-4.6 A6.6,6 0 0 0 -6.2,-1.2 Z" fill="${c.hair}"/>` +
       `<path d="M2.4,-7.4 A9.4,8.4 0 0 1 6.6,3.2 L3.9,3.2 A6.8,6 0 0 0 1.2,-4.8 Z" fill="${c.hair}"/>` +
       // nez
-      `<path d="M-0.6,7.6 L2.6,9.4 L-1.2,9.9" fill="${c.skin}" stroke="${c.line}" stroke-width="1.2" stroke-linejoin="round"/>` +
+      `<path d="M-0.6,7.6 L2.6,9.4 L-1.2,9.9" fill="${c.skin}" stroke="${c.line}" stroke-width="1.4" stroke-linejoin="round"/>` +
       // oeil
-      `<circle cx="0.6" cy="5.4" r="1.1" fill="${c.line}"/>` +
+      `<circle cx="0.6" cy="5.4" r="1.2" fill="${c.line}"/>` +
       `</g>`;
   },
 
@@ -269,66 +409,78 @@ const ANIMATIONS = {
        </ellipse>`);
   },
 
-  _arrow(d, dur) {
+  _arrow(d, dur, markerId) {
     const c = this._c;
     return `<path d="${d}" fill="none" stroke="${c.hot}" stroke-width="2.6" stroke-linecap="round"
-      marker-end="url(#anim-arrow)" opacity="0.9">
-      <animate attributeName="opacity" values="0.15;0.95;0.15" dur="${dur}s" repeatCount="indefinite"/></path>`;
+      marker-end="url(#${markerId})" opacity="0.9">
+      <animate attributeName="opacity" values="0.2;0.95;0.2" dur="${dur}s" repeatCount="indefinite"/></path>`;
   },
 
+  _instance: 0,
+
   // ------------------------------------------------------------------ rendu
-  _build(def) {
-    const dur = def.dur || 3;
+  _build(def, options = {}) {
+    const dur = this._duration(def, options.technique);
     const c = this._c;
-    // cycle aller-retour
-    const poses = def.poses;
-    const cycle = poses.concat(poses.slice(0, -1).reverse());
-    const frames = cycle.map(p => this._solve(p));
+    const frames = this._frames(def);
+    const markerId = `anim-arrow-${++this._instance}`;
 
     const held = def.hold ? this._gear(def.hold, false) : '';
     const heldF = def.holdF === 'none' ? '' : (def.holdF ? this._gear(def.holdF, true) : (def.hold === 'dumbbell' || def.hold === 'kettle' ? this._gear(def.hold, true) : ''));
 
-    const B = (posKey, angKey, content) => this._bone(frames, posKey, angKey, dur, content);
+    const limb = (from, to, w, far, garment, cover) => this._limb(frames, from, to, dur, w, far, garment, cover);
+    const rigid = (posKey, angKey, content) => this._attach(frames, posKey, angKey, dur, content);
 
-    // (les os enfants sont posés en absolu, pas en hiérarchie)
     const parts = [];
     parts.push(this._props(def.props));
 
-    // jambe opposée
-    parts.push(B('hip', 'thighF', this._segDressed(this.L.thigh, 10.5, 7, true, c.short, c.shortFar, 0.4)));
-    parts.push(B('knF', 'shinF', this._seg(this.L.shin, 7, 5, true)));
-    parts.push(B('anF', 'footF', this._foot(true)));
-    // bras opposé
-    parts.push(B('sh', 'armF', this._segDressed(this.L.arm, 8, 6, true, c.shirtFar, c.shirtFar, 0.45)));
-    parts.push(B('elF', 'foreF', this._seg(this.L.fore, 6, 4.6, true) +
-      `<g transform="translate(${this.L.fore},0)">${this._hand(true)}${heldF}</g>`));
+    // Côté éloigné : segments plus fins et plus sombres (profondeur).
+    parts.push(limb('hip', 'knF', 9, true, 'short', 0.40));
+    parts.push(limb('knF', 'anF', 6, true));
+    parts.push(rigid('anF', 'footF', this._foot(true)));
+    parts.push(limb('sh', 'elF', 7, true, 'shirt', 0.45));
+    parts.push(limb('elF', 'wrF', 5.2, true));
+    parts.push(rigid('wrF', 'foreF', this._hand(true) + heldF));
 
-    const nearArm = B('sh', 'arm', this._segDressed(this.L.arm, 8.4, 6.2, false, c.shirt, c.shirt, 0.45)) +
-      B('el', 'fore', this._seg(this.L.fore, 6.4, 4.8, false) +
-        `<g transform="translate(${this.L.fore},0)">${this._hand(false)}${held}</g>`);
+    // Bras proche : dessiné devant ou derrière le buste selon l'exercice.
+    const nearArm = limb('sh', 'el', 7.4, false, 'shirt', 0.45) +
+      limb('el', 'wr', 5.6, false) +
+      rigid('wr', 'fore', this._hand(false) + held);
 
-    // buste + tête
     if (def.armBehind) parts.push(nearArm);
-    parts.push(B('hip', 'torso', this._torso(false)));
-    if (def.onBack) parts.push(B('hip', 'torso', `<g transform="translate(${this.L.torso * 0.88},-11)">${this._gear(def.onBack, false)}</g>`));
-    if (def.onFront) parts.push(B('hip', 'torso', `<g transform="translate(${this.L.torso * 0.7},11)">${this._gear(def.onFront, false)}</g>`));
-    parts.push(B('sh', 'neck', this._head()));
+    // Buste et tête restent des pièces rigides : leur longueur est constante,
+    // donc translation + rotation les garde soudés au bassin et aux épaules.
+    parts.push(rigid('hip', 'torso', this._torso(false)));
+    if (def.onBack) parts.push(rigid('hip', 'torso', `<g transform="translate(${this.L.torso * 0.88},-11)">${this._gear(def.onBack, false)}</g>`));
+    if (def.onFront) parts.push(rigid('hip', 'torso', `<g transform="translate(${this.L.torso * 0.7},11)">${this._gear(def.onFront, false)}</g>`));
+    // Cou déformable : il se tasse quand la ceinture scapulaire s'élève.
+    const neckD = f => this._boneD(f, 'sh', 'hd');
+    parts.push(this._morph(frames, neckD, dur, `fill="none" stroke="${c.line}" stroke-width="8" stroke-linecap="round"`));
+    parts.push(this._morph(frames, neckD, dur, `fill="none" stroke="${c.skinSh}" stroke-width="5.8" stroke-linecap="round"`));
+    parts.push(rigid('hd', 'neck', this._skull()));
 
-    // jambe proche
-    parts.push(B('hip', 'thigh', this._segDressed(this.L.thigh, 11, 7.4, false, c.short, c.short, 0.42)));
-    parts.push(B('kn', 'shin', this._seg(this.L.shin, 7.4, 5.2, false)));
-    parts.push(B('an', 'foot', this._foot(false)));
-    // bras proche
+    // Jambe proche
+    parts.push(limb('hip', 'kn', 9.6, false, 'short', 0.42));
+    parts.push(limb('kn', 'an', 6.4, false));
+    parts.push(rigid('an', 'foot', this._foot(false)));
     if (!def.armBehind) parts.push(nearArm);
 
     if (def.glow) parts.push(this._glow(frames, def.glow[0], dur, def.glow[1], def.glow[2]));
-    if (def.arrow) parts.push(this._arrow(def.arrow, dur));
+    if (def.arrow) parts.push(this._arrow(def.arrow, dur, markerId));
 
     const vb = def.vb || '0 0 176 148';
-    return `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Animation de l'exercice">
-      <defs><marker id="anim-arrow" markerWidth="7" markerHeight="7" refX="4.5" refY="3.5" orient="auto">
+    const [vx, , vw] = vb.split(/\s+/).map(Number);
+    const label = this._escape(options.label || "Animation de l'exercice");
+    // Série gauche d'un exercice unilatéral : on retourne toute la scène.
+    const body = options.side === 'left'
+      ? `<g transform="translate(${this._r(2 * vx + vw)} 0) scale(-1 1)">${parts.join('\n')}</g>`
+      : parts.join('\n');
+
+    return `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${label}">
+      <style>@media (prefers-reduced-motion: reduce){animate,animateTransform{display:none}}</style>
+      <defs><marker id="${markerId}" markerWidth="7" markerHeight="7" refX="4.5" refY="3.5" orient="auto">
         <path d="M0,0 L7,3.5 L0,7 Z" fill="${c.hot}"/></marker></defs>
-      ${parts.join('\n')}
+      ${body}
     </svg>`;
   },
 
@@ -422,6 +574,8 @@ const ANIMATIONS = {
       ],
     },
 
+    // Seule la ceinture scapulaire monte : bassin, jambes et tête ne bougent
+    // pas, et les coudes restent tendus (le shrug n'est pas un tirage).
     'Shrug haltères (trapèzes)': {
       dur: 2.4, hold: 'dumbbell',
       props: [['floor', 138]],
@@ -429,7 +583,7 @@ const ANIMATIONS = {
       arrow: 'M118,58 L118,42',
       poses: [
         { hip: [80, 84], sh: [80, 50], hd: [80, 36], el: [83, 74], wr: [86, 96], elF: [77, 74], wrF: [74, 96], kn: [80, 112], an: [80, 138], toe: [93, 138], knF: [78, 113], anF: [78, 138], toeF: [91, 138] },
-        { hip: [80, 76], sh: [80, 42], hd: [80, 30], el: [83, 66], wr: [86, 88], elF: [77, 66], wrF: [74, 88], kn: [80, 108], an: [80, 138], toe: [93, 138], knF: [78, 109], anF: [78, 138], toeF: [91, 138] },
+        { hip: [80, 84], sh: [80, 50], hd: [80, 36], scapula: 7, el: [83, 74], wr: [86, 96], elF: [77, 74], wrF: [74, 96], kn: [80, 112], an: [80, 138], toe: [93, 138], knF: [78, 113], anF: [78, 138], toeF: [91, 138] },
       ],
     },
 
@@ -479,7 +633,7 @@ const ANIMATIONS = {
     },
 
     'Élévations frontales haltères': {
-      dur: 3, hold: 'dumbbell',
+      dur: 3, alternate: true, hold: 'dumbbell',
       props: [['floor', 138]],
       glow: ['sh', 12, 7],
       arrow: 'M126,92 L126,56',
@@ -513,7 +667,7 @@ const ANIMATIONS = {
     },
 
     'Curl marteau haltères': {
-      dur: 2.8, hold: 'dumbbell',
+      dur: 2.8, alternate: true, hold: 'dumbbell',
       props: [['floor', 138]],
       glow: ['el', 10, 7],
       arrow: 'M118,92 Q130,74 116,58',
@@ -596,9 +750,11 @@ const ANIMATIONS = {
       props: [['floor', 138]],
       glow: ['kn', 11, 8],
       arrow: 'M150,72 L150,104',
+      // En position basse, le pied avant reste à plat au sol et le genou
+      // arrière descend vers le sol, talon décollé (appui sur la pointe).
       poses: [
         { hip: [80, 84], sh: [80, 50], hd: [80, 36], el: [83, 74], wr: [86, 96], elF: [77, 74], wrF: [74, 96], kn: [92, 112], an: [96, 138], toe: [109, 138], knF: [68, 112], anF: [60, 138], toeF: [73, 138] },
-        { hip: [80, 100], sh: [80, 66], hd: [80, 52], el: [83, 90], wr: [86, 112], elF: [77, 90], wrF: [74, 112], kn: [100, 116], an: [96, 138], toe: [109, 138], knF: [64, 124], anF: [54, 136], toeF: [66, 138] },
+        { hip: [80, 100], sh: [80, 66], hd: [80, 52], el: [83, 90], wr: [86, 112], elF: [77, 90], wrF: [74, 112], kn: [106, 112], an: [96, 137], toe: [109, 138], knF: [79, 129], anF: [52, 128], toeF: [62, 137] },
       ],
     },
 
@@ -635,8 +791,10 @@ const ANIMATIONS = {
       ],
     },
 
+    // Le haut du dos reste calé sur le banc : c'est l'épaule qui ancre la
+    // figure, sinon le buste glissait sur l'appui à chaque répétition.
     'Hip Thrust haltère': {
-      dur: 3, hold: 'plate', holdF: 'none',
+      dur: 3, torsoAnchor: 'shoulder', hold: 'plate', holdF: 'none',
       props: [['floor', 138], ['bench', 28, 94, 48]],
       glow: ['hip', 12, 9],
       arrow: 'M148,120 L148,96',
@@ -657,8 +815,9 @@ const ANIMATIONS = {
       ],
     },
 
+    // Un seul haltère : l'autre main sert d'appui (cf. description).
     'Mollets debout haltère': {
-      dur: 2.2, vb: '0 -14 176 162', hold: 'dumbbell',
+      dur: 2.2, vb: '0 -14 176 162', hold: 'dumbbell', holdF: 'none',
       props: [['floor', 138], ['box', 62, 122, 54, 12]],
       glow: ['an', 9, 7],
       arrow: 'M148,108 L148,86',
@@ -696,9 +855,10 @@ const ANIMATIONS = {
       props: [['floor', 136]],
       glow: ['hip', 12, 9],
       arrow: 'M124,120 Q126,100 106,90',
+      // Idem : les avant-bras restent en appui au sol pendant l'enroulement.
       poses: [
-        { hip: [92, 124], sh: [58, 124], hd: [45, 124], el: [62, 132], wr: [80, 133], elF: [60, 133], wrF: [78, 134], kn: [110, 106], an: [128, 122], toe: [141, 120], knF: [108, 107], anF: [126, 123], toeF: [139, 121] },
-        { hip: [88, 118], sh: [56, 124], hd: [43, 125], el: [60, 132], wr: [78, 133], elF: [58, 133], wrF: [76, 134], kn: [92, 96], an: [72, 86], toe: [62, 78], knF: [90, 97], anF: [70, 87], toeF: [60, 79] },
+        { hip: [92, 124], sh: [58, 124], hd: [45, 124], el: [82, 130], wr: [102, 132], elF: [80, 131], wrF: [100, 133], kn: [110, 106], an: [128, 122], toe: [141, 120], knF: [108, 107], anF: [126, 123], toeF: [139, 121] },
+        { hip: [88, 118], sh: [56, 124], hd: [43, 125], el: [80, 130], wr: [100, 132], elF: [78, 131], wrF: [98, 133], kn: [92, 96], an: [72, 86], toe: [62, 78], knF: [90, 97], anF: [70, 87], toeF: [60, 79] },
       ],
     },
 
@@ -707,46 +867,73 @@ const ANIMATIONS = {
       props: [['floor', 136]],
       glow: ['hip', 12, 9],
       arrow: 'M148,120 Q152,96 130,80',
+      // Bras allongés le long du corps, posés sur le sol (et non enfoncés
+      // dedans comme le faisaient les anciennes consignes de coude).
       poses: [
-        { hip: [90, 124], sh: [56, 124], hd: [43, 124], el: [60, 132], wr: [78, 133], elF: [58, 133], wrF: [76, 134], kn: [118, 126], an: [146, 124], toe: [156, 118], knF: [116, 127], anF: [144, 125], toeF: [154, 119] },
-        { hip: [90, 124], sh: [56, 124], hd: [43, 124], el: [60, 132], wr: [78, 133], elF: [58, 133], wrF: [76, 134], kn: [98, 100], an: [100, 70], toe: [110, 62], knF: [96, 101], anF: [98, 71], toeF: [108, 63] },
+        { hip: [90, 124], sh: [56, 124], hd: [43, 124], el: [80, 130], wr: [100, 132], elF: [78, 131], wrF: [98, 133], kn: [118, 126], an: [146, 124], toe: [156, 118], knF: [116, 127], anF: [144, 125], toeF: [154, 119] },
+        { hip: [90, 124], sh: [56, 124], hd: [43, 124], el: [80, 130], wr: [100, 132], elF: [78, 131], wrF: [98, 133], kn: [98, 100], an: [100, 70], toe: [110, 62], knF: [96, 101], anF: [98, 71], toeF: [108, 63] },
       ],
     },
 
+    // Exercice isométrique : le corps doit rester parfaitement aligné et
+    // immobile. L'ancienne version faisait retomber le bassin en boucle.
     'Gainage planche': {
-      dur: 4,
+      dur: 4, static: true,
       props: [['floor', 136]],
       glow: ['hip', 13, 9],
-      arrow: 'M92,88 L92,74',
       poses: [
         { hip: [88, 112], sh: [50, 108], hd: [37, 106], el: [48, 130], wr: [70, 132], elF: [46, 131], wrF: [68, 133], kn: [116, 120], an: [136, 130], toe: [144, 136], knF: [114, 121], anF: [134, 131], toeF: [142, 137] },
-        { hip: [88, 116], sh: [50, 108], hd: [37, 106], el: [48, 130], wr: [70, 132], elF: [46, 131], wrF: [68, 133], kn: [116, 122], an: [136, 130], toe: [144, 136], knF: [114, 123], anF: [134, 131], toeF: [142, 137] },
       ],
     },
 
+    // Position de pompe : ce sont les mains qui portent la figure, d'où
+    // l'ancrage sur l'épaule (bras tendus, mains réellement au sol).
+    // Trois poses : jambe tendue en arrière → passage des deux genoux sous le
+    // bassin → inversion. Sans cette pose de passage, la jambe traversait le
+    // sol en balayant la verticale.
     'Mountain climber': {
-      dur: 1.6,
+      dur: 1.6, torsoAnchor: 'shoulder',
       props: [['floor', 136]],
       glow: ['hip', 12, 9],
       arrow: 'M60,116 L84,116',
       poses: [
-        { hip: [92, 108], sh: [54, 96], hd: [42, 90], el: [52, 114], wr: [50, 132], elF: [50, 115], wrF: [48, 133], kn: [116, 120], an: [138, 132], toe: [150, 134], knF: [96, 116], anF: [116, 128], toeF: [128, 130] },
-        { hip: [92, 108], sh: [54, 96], hd: [42, 90], el: [52, 114], wr: [50, 132], elF: [50, 115], wrF: [48, 133], kn: [82, 112], an: [64, 122], toe: [52, 126], knF: [116, 122], anF: [138, 132], toeF: [150, 134] },
+        // jambe arrière tendue, appui sur la pointe du pied (pied vertical)
+        { hip: [92, 95], sh: [54, 88], hd: [42, 84], el: [54, 112], wr: [54, 134], elF: [52, 113], wrF: [52, 135],
+          kn: [117, 108], an: [139, 123], toe: [139, 136],
+          knF: [60, 102], anF: [76, 124], toeF: [88, 132] },
+        // passage : genoux bas sous le bassin, talons relevés
+        { hip: [92, 95], sh: [54, 88], hd: [42, 84], el: [54, 112], wr: [54, 134], elF: [52, 113], wrF: [52, 135],
+          kn: [88, 126], an: [116, 118], toe: [128, 128],
+          knF: [90, 125], anF: [118, 117], toeF: [130, 127] },
+        // inversion des jambes
+        { hip: [92, 95], sh: [54, 88], hd: [42, 84], el: [54, 112], wr: [54, 134], elF: [52, 113], wrF: [52, 135],
+          kn: [60, 102], an: [76, 124], toe: [88, 132],
+          knF: [117, 108], anF: [139, 123], toeF: [139, 136] },
       ],
     },
   },
 
+  // Les noms d'exercices sont saisis par l'utilisateur : on les échappe avant
+  // de les injecter dans du balisage.
+  _escape(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[ch]);
+  },
+
   _default(name) {
     const c = this._c;
-    return `<svg viewBox="0 0 176 148" xmlns="http://www.w3.org/2000/svg">
-      <text x="88" y="78" text-anchor="middle" fill="${c.metal}" font-size="11" font-family="system-ui">${(name || 'Exercice').slice(0, 24)}</text>
+    const safe = this._escape((name || 'Exercice').slice(0, 24));
+    return `<svg viewBox="0 0 176 148" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${safe}">
+      <text x="88" y="78" text-anchor="middle" fill="${c.metal}" font-size="11" font-family="system-ui">${safe}</text>
     </svg>`;
   },
 
-  get(name) {
+  // options : { label, side: 'left'|'right', mode, technique }
+  get(name, options = {}) {
     const def = this.E[name];
     if (!def) return this._default(name);
-    try { return this._build(def); }
+    try { return this._build(def, options); }
     catch (e) { console.warn('animation error', name, e); return this._default(name); }
   },
 };
