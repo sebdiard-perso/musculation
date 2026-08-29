@@ -23,16 +23,38 @@ const ANIMATIONS = {
 
   _c: {
     skin: '#f2c9a0', skinSh: '#d9a87e', skinFar: '#c08f68',
+    skinHi: '#ffe3c2', skinFarHi: '#d7a37a',
     shirt: '#4d7cc7', shirtFar: '#2f4f85', shirtSh: '#3a63a6',
+    shirtHi: '#79a6e6', shirtFarHi: '#43689f',
     short: '#2c3550', shortFar: '#1e2438',
-    shoe: '#1f2536', hair: '#40301f',
+    shortHi: '#3f4c72', shortFarHi: '#2a3350',
+    shoe: '#1f2536', shoeHi: '#39425c', hair: '#40301f',
     line: '#141824',
     metal: '#9aa3ba', metalDark: '#5a6178',
     hot: '#4ecca3',
     gear: '#333a4f',
-    bench: '#39415a', benchTop: '#4a5470',
-    floor: '#2b3247',
+    bench: '#39415a', benchTop: '#4a5470', benchSide: '#2e3550',
+    floor: '#2b3247', floorSide: '#222839',
+    shadow: '#05070d',
   },
+
+  // ------------------------------------------------------------- caméra 3D
+  // Le squelette est calculé en 3D : x/y = plan sagittal (celui des poses),
+  // z = axe latéral (gauche/droite du corps, perpendiculaire aux poses).
+  // Projection oblique : l'axe z se projette sur un vecteur écran constant,
+  // ce qui donne une vue de trois quarts sans déformer les poses existantes
+  // ni désaligner le décor dessiné en coordonnées écran.
+  // Caméra placée à droite et légèrement au-dessus : le côté opposé du corps
+  // se décale vers la gauche et vers le haut, comme les faces supérieures du
+  // décor, ce qui donne un point de vue cohérent sur toute la scène.
+  CAM: { lx: 0.94, ly: 0.18 },
+
+  // Demi-largeurs du corps : les deux épaules et les deux hanches cessent
+  // d'être confondues, donc les membres gauche et droit se distinguent.
+  BODY: { shoulder: 7, hip: 5 },
+
+  // Lumière (écran) servant à placer le reflet sur le galbe des membres.
+  LIGHT: [-0.42, -0.91],
 
   // Longueurs d'os (px). Le rapport jambe/tronc (56/34 ≈ 1,65) et la stature
   // d'environ 7,4 têtes correspondent à une morphologie adulte ; les jambes
@@ -49,66 +71,100 @@ const ANIMATIONS = {
     return [o[0] + len * Math.cos(r), o[1] - len * Math.sin(r)];
   },
 
-  // cinématique directe : positions imposées par les longueurs d'os
-  _solve(p, def = {}) {
-    const L = this.L, A = this._ang.bind(this), S = this._step.bind(this);
-    const g = (k, fb) => p[k] || fb;
+  // ---------------------------------------------------------- géométrie 3D
+  _sub3(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; },
 
-    // Point d'ancrage du tronc. Par défaut le bassin porte la figure ; pour un
-    // hip thrust c'est le haut du dos qui reste calé sur le banc.
-    const aTorso = A(p.hip, p.sh);
+  // point situé à `len` de `o`, dans la direction du vecteur `v`
+  _offset3(o, v, len) {
+    const n = Math.hypot(v[0], v[1], v[2]) || 1e-6;
+    return [o[0] + v[0] / n * len, o[1] + v[1] / n * len, o[2] + v[2] / n * len];
+  },
+
+  // projection oblique 3D -> écran
+  _proj(v) { return [v[0] + v[2] * this.CAM.lx, v[1] + v[2] * this.CAM.ly]; },
+
+  // Cinématique directe 3D. Les poses restent décrites en 2D dans le plan
+  // sagittal ; `p.z` permet, exercice par exercice, de sortir un membre de ce
+  // plan (élévations latérales, écarté, oiseau). Les longueurs d'os sont
+  // imposées en 3D, donc un membre qui pointe vers la caméra se raccourcit
+  // naturellement à l'écran.
+  _solve(p, def = {}) {
+    const L = this.L, B = this.BODY;
+    const z = p.z || {};
+    const sub = this._sub3.bind(this), off = this._offset3.bind(this);
+    // point de pose en 3D : z explicite si fourni, sinon plan du membre
+    const P = (key, fallback, zDef) => {
+      const xy = p[key] || fallback;
+      return [xy[0], xy[1], z[key] !== undefined ? z[key] : zDef];
+    };
+
+    // --- tronc : sur l'axe médian du corps (z = 0) ---
+    const hipPose = [p.hip[0], p.hip[1], 0];
+    const shPose = [p.sh[0], p.sh[1], 0];
     let hip, torsoSh;
     if (def.torsoAnchor === 'shoulder') {
-      torsoSh = p.sh;
-      hip = S(torsoSh, aTorso + 180, L.torso);
+      torsoSh = shPose;
+      hip = off(torsoSh, sub(hipPose, shPose), L.torso);
     } else {
-      hip = p.hip;
-      torsoSh = S(hip, aTorso, L.torso);
+      hip = hipPose;
+      torsoSh = off(hip, sub(shPose, hipPose), L.torso);
     }
-    // La ceinture scapulaire peut s'élever seule (shrug) : le bassin et les
-    // jambes ne doivent pas monter avec les épaules.
-    const sh = p.scapula ? [torsoSh[0], torsoSh[1] - p.scapula] : torsoSh;
+    // La ceinture scapulaire peut s'élever seule (shrug).
+    const sh = p.scapula ? [torsoSh[0], torsoSh[1] - p.scapula, torsoSh[2]] : torsoSh;
 
-    // Le crâne est positionné depuis le tronc, pas depuis l'épaule : quand les
-    // épaules montent (shrug), la tête reste en place et le cou se tasse.
-    const aNeck = A(p.sh, g('hd', [p.sh[0], p.sh[1] - L.head]));
-    const hd = S(torsoSh, aNeck, L.head);
+    // Tête portée par le tronc : lors d'un shrug elle ne monte pas.
+    const hdPose = P('hd', [p.sh[0], p.sh[1] - L.head], 0);
+    const hd = off(torsoSh, sub(hdPose, shPose), L.head);
 
-    const aArm = A(p.sh, p.el);
-    const el = S(sh, aArm, L.arm);
-    const aFore = A(p.el, p.wr);
-    const wr = S(el, aFore, L.fore);
+    // --- racines des membres, écartées de part et d'autre de l'axe médian ---
+    const shN = [sh[0], sh[1], sh[2] + B.shoulder];
+    const shF = [sh[0], sh[1], sh[2] - B.shoulder];
+    const hipN = [hip[0], hip[1], hip[2] + B.hip];
+    const hipF = [hip[0], hip[1], hip[2] - B.hip];
 
-    const elFa = g('elF', p.el), wrFa = g('wrF', p.wr);
-    const aArmF = A(p.sh, elFa);
-    const elF = S(sh, aArmF, L.arm);
-    const aForeF = A(elFa, wrFa);
-    const wrF = S(elF, aForeF, L.fore);
+    // --- bras ---
+    const zAN = B.shoulder, zAF = -B.shoulder;
+    const shRefN = [p.sh[0], p.sh[1], zAN], shRefF = [p.sh[0], p.sh[1], zAF];
+    const elRefN = P('el', p.el, zAN), wrRefN = P('wr', p.wr, zAN);
+    const el = off(shN, sub(elRefN, shRefN), L.arm);
+    const wr = off(el, sub(wrRefN, elRefN), L.fore);
 
-    const aThigh = A(hip, p.kn);
-    const kn = S(hip, aThigh, L.thigh);
-    const aShin = A(p.kn, p.an);
-    const an = S(kn, aShin, L.shin);
-    const toeA = g('toe', [p.an[0] + 13, p.an[1]]);
-    const aFoot = A(p.an, toeA);
-    const toe = S(an, aFoot, L.foot);
+    const elRefF = P('elF', p.el, zAF), wrRefF = P('wrF', p.wr, zAF);
+    const elF = off(shF, sub(elRefF, shRefF), L.arm);
+    const wrF = off(elF, sub(wrRefF, elRefF), L.fore);
 
-    const knFa = g('knF', p.kn), anFa = g('anF', p.an);
-    const aThighF = A(hip, knFa);
-    const knF = S(hip, aThighF, L.thigh);
-    const aShinF = A(knFa, anFa);
-    const anF = S(knF, aShinF, L.shin);
+    // --- jambes ---
+    const zLN = B.hip, zLF = -B.hip;
+    const hipRefN = [p.hip[0], p.hip[1], zLN], hipRefF = [p.hip[0], p.hip[1], zLF];
+    const knRefN = P('kn', p.kn, zLN), anRefN = P('an', p.an, zLN);
+    const kn = off(hipN, sub(knRefN, hipRefN), L.thigh);
+    const an = off(kn, sub(anRefN, knRefN), L.shin);
+    const toeRefN = P('toe', [p.an[0] + L.foot, p.an[1]], zLN);
+    const dirFoot = sub(toeRefN, anRefN);
+    const toe = off(an, dirFoot, L.foot);
+
+    const knRefF = P('knF', p.kn, zLF), anRefF = P('anF', p.an, zLF);
+    const knF = off(hipF, sub(knRefF, hipRefF), L.thigh);
+    const anF = off(knF, sub(anRefF, knRefF), L.shin);
     // Sans consigne explicite, le pied éloigné copie l'orientation du pied
     // proche : il ne peut plus pivoter brutalement d'un demi-tour.
-    const aFootF = p.toeF ? A(anFa, p.toeF) : aFoot;
-    const toeF = S(anF, aFootF, L.foot);
+    const dirFootF = p.toeF ? sub(P('toeF', p.toeF, zLF), anRefF) : dirFoot;
+    const toeF = off(anF, dirFootF, L.foot);
+
+    // --- projection écran ---
+    const joints = { hip, torsoSh, sh, shN, shF, hipN, hipF, hd, el, wr, elF, wrF, kn, an, toe, knF, anF, toeF };
+    const pos = {}, depth = {};
+    for (const k in joints) { pos[k] = this._proj(joints[k]); depth[k] = joints[k][2]; }
+    const A = (a, b) => this._ang(pos[a], pos[b]);
 
     return {
-      pos: { hip, torsoSh, sh, hd, el, wr, elF, wrF, kn, an, toe, knF, anF, toeF },
+      pos, depth, j3: joints,
       ang: {
-        torso: A(hip, torsoSh), neck: A(sh, hd), arm: aArm, fore: aFore, armF: aArmF,
-        foreF: aForeF, thigh: aThigh, shin: aShin, foot: aFoot,
-        thighF: aThighF, shinF: aShinF, footF: aFootF,
+        torso: A('hip', 'torsoSh'), neck: A('sh', 'hd'),
+        arm: A('shN', 'el'), fore: A('el', 'wr'),
+        armF: A('shF', 'elF'), foreF: A('elF', 'wrF'),
+        thigh: A('hipN', 'kn'), shin: A('kn', 'an'), foot: A('an', 'toe'),
+        thighF: A('hipF', 'knF'), shinF: A('knF', 'anF'), footF: A('anF', 'toeF'),
       },
     };
   },
@@ -156,12 +212,29 @@ const ANIMATIONS = {
     const out = {};
     new Set([...Object.keys(a), ...Object.keys(b)]).forEach(key => {
       const av = a[key], bv = b[key];
-      if (Array.isArray(av) && Array.isArray(bv)) out[key] = av.map((v, i) => v + ((bv[i] ?? v) - v) * t);
+      if (key === 'z') {
+        // profondeurs latérales : interpolation champ par champ
+        const za = av || {}, zb = bv || {};
+        const mixed = {};
+        new Set([...Object.keys(za), ...Object.keys(zb)]).forEach(j => {
+          const x = za[j], y = zb[j];
+          mixed[j] = (typeof x === 'number' && typeof y === 'number') ? x + (y - x) * t : (x ?? y);
+        });
+        out.z = mixed;
+      }
+      else if (Array.isArray(av) && Array.isArray(bv)) out[key] = av.map((v, i) => v + ((bv[i] ?? v) - v) * t);
       else if (typeof av === 'number' && typeof bv === 'number') out[key] = av + (bv - av) * t;
       else out[key] = t < 0.5 ? (av ?? bv) : (bv ?? av);
     });
 
+    // Les articulations dont la trajectoire est décrite en profondeur sortent
+    // du plan des poses : leur interpolation reste cartésienne (donc 3D).
+    // L'interpolation polaire ci-dessous suppose un mouvement plan et, pour un
+    // membre qui pointe vers la caméra, ferait basculer sa projection.
+    const spatial = new Set([...Object.keys((a.z) || {}), ...Object.keys((b.z) || {})]);
+
     this._CHAINS.forEach(([child, parent]) => {
+      if (spatial.has(child)) return;
       if (!a[child] || !b[child] || !a[parent] || !b[parent] || !out[parent]) return;
       const angle = this._mixAngle(this._ang(a[parent], a[child]), this._ang(b[parent], b[child]), t);
       const lenA = Math.hypot(a[child][0] - a[parent][0], a[child][1] - a[parent][1]);
@@ -196,7 +269,9 @@ const ANIMATIONS = {
     if (def.static) return [this._solve(def.poses[0], def)];
 
     const poses = def.poses;
-    const count = 37;
+    // 31 échantillons : l'erreur de corde reste sous ~1 px sur le plus long
+    // segment, tout en limitant le poids du SVG injecté dans la page.
+    const count = 31;
     const frames = [];
     for (let i = 0; i < count; i++) {
       const t = i / (count - 1);
@@ -228,11 +303,32 @@ const ANIMATIONS = {
 
   // Tracé d'un os, de l'articulation parente vers l'enfant. `portion` permet
   // de ne couvrir qu'une partie de l'os (manche, cuissard).
-  _boneD(frame, from, to, portion = 1) {
+  _boneD(frame, from, to, portion = 1, offset = 0) {
     const a = frame.pos[from], b = frame.pos[to];
-    const x = a[0] + (b[0] - a[0]) * portion;
-    const y = a[1] + (b[1] - a[1]) * portion;
-    return `M${this._r(a[0])},${this._r(a[1])} L${this._r(x)},${this._r(y)}`;
+    let ax = a[0], ay = a[1];
+    let bx = a[0] + (b[0] - a[0]) * portion, by = a[1] + (b[1] - a[1]) * portion;
+    if (offset) {
+      // décalage perpendiculaire à l'os (galbe / reflet)
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const n = Math.hypot(dx, dy) || 1;
+      const nx = dy / n * offset, ny = -dx / n * offset;
+      ax += nx; ay += ny; bx += nx; by += ny;
+    }
+    return `M${this._r(ax)},${this._r(ay)} L${this._r(bx)},${this._r(by)}`;
+  },
+
+  // Côté éclairé d'un os, choisi une seule fois d'après sa direction moyenne :
+  // le reflet ne peut donc pas sauter d'un bord à l'autre en cours de geste.
+  _litSide(frames, from, to) {
+    let sx = 0, sy = 0;
+    frames.forEach(f => {
+      const a = f.pos[from], b = f.pos[to];
+      sx += b[0] - a[0]; sy += b[1] - a[1];
+    });
+    const n = Math.hypot(sx, sy) || 1;
+    // normale locale (rotation de -90°) comparée à la direction de la lumière
+    const dot = (sy / n) * this.LIGHT[0] + (-sx / n) * this.LIGHT[1];
+    return dot >= 0 ? 1 : -1;
   },
 
   // Tracé dont la géométrie est animée image par image.
@@ -247,16 +343,46 @@ const ANIMATIONS = {
   // l'os. Les deux extrémités sont exactement les articulations résolues.
   _limb(frames, from, to, dur, width, far, garment, cover = 0.42) {
     const c = this._c;
+    const side = this._litSide(frames, from, to);
     const d = f => this._boneD(f, from, to);
-    let out = this._morph(frames, d, dur, `fill="none" stroke="${c.line}" stroke-width="${this._r(width + 2.2)}" stroke-linecap="round"`) +
-      this._morph(frames, d, dur, `fill="none" stroke="${far ? c.skinFar : c.skin}" stroke-width="${this._r(width)}" stroke-linecap="round"`);
+    // contour sombre, puis chair, puis reflet décalé côté lumière : le membre
+    // se lit comme un volume cylindrique et non comme un trait plat.
+    const hi = f => this._boneD(f, from, to, 1, side * width * 0.2);
+    let out =
+      this._morph(frames, d, dur, `fill="none" stroke="${c.line}" stroke-width="${this._r(width + 2.2)}" stroke-linecap="round"`) +
+      this._morph(frames, d, dur, `fill="none" stroke="${far ? c.skinFar : c.skin}" stroke-width="${this._r(width)}" stroke-linecap="round"`) +
+      this._morph(frames, hi, dur, `fill="none" stroke="${far ? c.skinFarHi : c.skinHi}" stroke-width="${this._r(width * 0.34)}" stroke-linecap="round" opacity="0.75"`);
     if (garment) {
-      const cloth = garment === 'short' ? (far ? c.shortFar : c.short) : (far ? c.shirtFar : c.shirt);
-      const dressed = f => this._boneD(f, from, to, cover);
-      out += this._morph(frames, dressed, dur, `fill="none" stroke="${c.line}" stroke-width="${this._r(width + 2.6)}" stroke-linecap="round"`) +
-        this._morph(frames, dressed, dur, `fill="none" stroke="${cloth}" stroke-width="${this._r(width + 0.6)}" stroke-linecap="round"`);
+      // Le vêtement se superpose au haut de l'os. Il ne reçoit pas de contour
+      // propre : celui du membre l'entoure déjà, et chaque tracé animé pèse
+      // lourd dans le SVG injecté.
+      const isShort = garment === 'short';
+      const cloth = isShort ? (far ? c.shortFar : c.short) : (far ? c.shirtFar : c.shirt);
+      out += this._morph(frames, f => this._boneD(f, from, to, cover), dur,
+        `fill="none" stroke="${cloth}" stroke-width="${this._r(width + 1.4)}" stroke-linecap="round"`);
     }
     return out;
+  },
+
+  // Ombre de contact au sol : elle rétrécit et s'efface quand le pied se lève,
+  // ce qui ancre la figure sur le décor.
+  _contactShadow(frames, key, floorY, dur) {
+    const c = this._c;
+    const geo = f => {
+      const p = f.pos[key];
+      const k = Math.max(0, Math.min(1, 1 - Math.max(0, floorY - p[1]) / 30));
+      return { rx: 4 + 10 * k, ry: 1.2 + 2.4 * k, k, x: p[0] };
+    };
+    const d = f => {
+      const g = geo(f);
+      return `M${this._r(g.x - g.rx)},${floorY} a${this._r(g.rx)},${this._r(g.ry)} 0 1 0 ${this._r(g.rx * 2)},0 a${this._r(g.rx)},${this._r(g.ry)} 0 1 0 ${this._r(-g.rx * 2)},0`;
+    };
+    const values = frames.map(d);
+    const opacities = frames.map(f => this._r(0.05 + 0.24 * geo(f).k));
+    const anim = frames.length === 1 ? '' :
+      `<animate attributeName="d" values="${values.join(';')}" calcMode="linear" dur="${dur}s" repeatCount="indefinite"/>` +
+      `<animate attributeName="opacity" values="${opacities.join(';')}" calcMode="linear" dur="${dur}s" repeatCount="indefinite"/>`;
+    return `<path d="${values[0]}" fill="${c.shadow}" opacity="${opacities[0]}">${anim}</path>`;
   },
 
   // Élément rigide (main, pied, tête, matériel) placé sur une articulation et
@@ -359,16 +485,32 @@ const ANIMATIONS = {
   },
 
   // ------------------------------------------------------------------ décor
+  // Décalage écran d'une profondeur latérale, dans la même projection que le
+  // squelette : le décor et la figure partagent donc le même point de vue.
+  _lat(d) { return [d * this.CAM.lx, d * this.CAM.ly]; },
+
+  // Face supérieure d'un volume : le dessus vu en fuite vers l'arrière.
+  _topFace(x, y, w, depth, fill) {
+    const c = this._c;
+    const [ox, oy] = this._lat(-depth);
+    const p = (a, b) => `${this._r(a)},${this._r(b)}`;
+    return `<path d="M${p(x, y)} L${p(x + w, y)} L${p(x + w + ox, y + oy)} L${p(x + ox, y + oy)} Z"
+      fill="${fill}" stroke="${c.line}" stroke-width="1.2" stroke-linejoin="round"/>`;
+  },
+
   _floorProp(y = 138) {
     const c = this._c;
-    return `<rect x="0" y="${y}" width="180" height="4" rx="2" fill="${c.floor}"/>`;
+    // bande de sol fuyant vers l'arrière, puis arête vue de face
+    return this._topFace(-6, y, 192, 26, c.floorSide) +
+      `<rect x="0" y="${y}" width="180" height="4" rx="2" fill="${c.floor}"/>`;
   },
 
   _benchProp(x, y, w, h = 9) {
     const c = this._c;
     const legs = `<rect x="${x + 5}" y="${y + h}" width="6" height="${142 - y - h}" fill="${c.bench}"/>` +
       `<rect x="${x + w - 11}" y="${y + h}" width="6" height="${142 - y - h}" fill="${c.bench}"/>`;
-    return legs + `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3.5" fill="${c.benchTop}" stroke="${c.line}" stroke-width="1.6"/>`;
+    return this._topFace(x, y, w, 17, c.benchSide) + legs +
+      `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3.5" fill="${c.benchTop}" stroke="${c.line}" stroke-width="1.6"/>`;
   },
 
   _inclineProp(x1, y1, x2, y2, w) {
@@ -379,7 +521,8 @@ const ANIMATIONS = {
 
   _boxProp(x, y, w, h) {
     const c = this._c;
-    return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2.5" fill="${c.bench}" stroke="${c.line}" stroke-width="1.6"/>`;
+    return this._topFace(x, y, w, 15, c.benchSide) +
+      `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2.5" fill="${c.bench}" stroke="${c.line}" stroke-width="1.6"/>`;
   },
 
   _backrestProp(x, y, x2, y2) {
@@ -434,16 +577,24 @@ const ANIMATIONS = {
     const parts = [];
     parts.push(this._props(def.props));
 
-    // Côté éloigné : segments plus fins et plus sombres (profondeur).
-    parts.push(limb('hip', 'knF', 9, true, 'short', 0.40));
+    // Ombres de contact, dessinées juste au-dessus du sol.
+    const floorProp = (def.props || []).find(pr => pr[0] === 'floor');
+    if (floorProp) {
+      parts.push(this._contactShadow(frames, 'anF', floorProp[1], dur));
+      parts.push(this._contactShadow(frames, 'an', floorProp[1], dur));
+    }
+
+    // Côté éloigné : membres plus fins et plus sombres, décalés vers le fond
+    // par la projection (leur racine est l'épaule / la hanche opposée).
+    parts.push(limb('hipF', 'knF', 9, true, 'short', 0.40));
     parts.push(limb('knF', 'anF', 6, true));
     parts.push(rigid('anF', 'footF', this._foot(true)));
-    parts.push(limb('sh', 'elF', 7, true, 'shirt', 0.45));
+    parts.push(limb('shF', 'elF', 7, true, 'shirt', 0.45));
     parts.push(limb('elF', 'wrF', 5.2, true));
     parts.push(rigid('wrF', 'foreF', this._hand(true) + heldF));
 
     // Bras proche : dessiné devant ou derrière le buste selon l'exercice.
-    const nearArm = limb('sh', 'el', 7.4, false, 'shirt', 0.45) +
+    const nearArm = limb('shN', 'el', 7.4, false, 'shirt', 0.45) +
       limb('el', 'wr', 5.6, false) +
       rigid('wr', 'fore', this._hand(false) + held);
 
@@ -460,7 +611,7 @@ const ANIMATIONS = {
     parts.push(rigid('hd', 'neck', this._skull()));
 
     // Jambe proche
-    parts.push(limb('hip', 'kn', 9.6, false, 'short', 0.42));
+    parts.push(limb('hipN', 'kn', 9.6, false, 'short', 0.42));
     parts.push(limb('kn', 'an', 6.4, false));
     parts.push(rigid('an', 'foot', this._foot(false)));
     if (!def.armBehind) parts.push(nearArm);
@@ -621,14 +772,22 @@ const ANIMATIONS = {
       ],
     },
 
+    // Seul exercice dont le geste sort franchement du plan des poses : les bras
+    // s'écartent sur les côtés du corps, pas vers l'avant. Les profondeurs `z`
+    // décrivent donc une véritable abduction, légèrement en avant du plan
+    // frontal (plan scapulaire), et le raccourcissement à l'écran est calculé.
     'Élévations latérales haltères': {
       dur: 3, hold: 'dumbbell',
       props: [['floor', 138]],
       glow: ['sh', 12, 7],
       arrow: 'M126,88 L126,54',
       poses: [
-        { hip: [80, 80], sh: [80, 46], hd: [80, 32], el: [83, 70], wr: [86, 92], elF: [77, 70], wrF: [74, 92], kn: [80, 110], an: [80, 138], toe: [93, 138], knF: [78, 111], anF: [78, 138], toeF: [91, 138] },
-        { hip: [80, 80], sh: [80, 46], hd: [80, 32], el: [102, 52], wr: [124, 48], elF: [58, 52], wrF: [36, 48], kn: [80, 110], an: [80, 138], toe: [93, 138], knF: [78, 111], anF: [78, 138], toeF: [91, 138] },
+        { hip: [80, 80], sh: [80, 46], hd: [80, 32], el: [82, 70], wr: [84, 92], elF: [82, 70], wrF: [84, 92],
+          z: { el: 8, wr: 9, elF: -8, wrF: -9 },
+          kn: [80, 110], an: [80, 138], toe: [93, 138], knF: [78, 111], anF: [78, 138], toeF: [91, 138] },
+        { hip: [80, 80], sh: [80, 46], hd: [80, 32], el: [84, 44], wr: [92, 42], elF: [84, 44], wrF: [92, 42],
+          z: { el: 26, wr: 46, elF: -26, wrF: -46 },
+          kn: [80, 110], an: [80, 138], toe: [93, 138], knF: [78, 111], anF: [78, 138], toeF: [91, 138] },
       ],
     },
 
@@ -765,7 +924,8 @@ const ANIMATIONS = {
       arrow: 'M28,58 L52,58',
       poses: [
         { hip: [74, 84], sh: [74, 50], hd: [74, 36], el: [77, 74], wr: [80, 96], elF: [71, 74], wrF: [68, 96], kn: [84, 112], an: [88, 138], toe: [101, 138], knF: [64, 112], anF: [60, 138], toeF: [73, 138] },
-        { hip: [86, 98], sh: [86, 64], hd: [86, 50], el: [89, 88], wr: [92, 110], elF: [83, 88], wrF: [80, 110], kn: [106, 116], an: [104, 138], toe: [117, 138], knF: [68, 122], anF: [56, 136], toeF: [68, 138] },
+        // genou avant au-dessus du pied pour que celui-ci reste posé au sol
+        { hip: [86, 98], sh: [86, 64], hd: [86, 50], el: [89, 88], wr: [92, 110], elF: [83, 88], wrF: [80, 110], kn: [112, 110], an: [104, 136], toe: [117, 137], knF: [68, 122], anF: [56, 136], toeF: [68, 138] },
       ],
     },
 
@@ -775,8 +935,9 @@ const ANIMATIONS = {
       glow: ['kn', 11, 8],
       arrow: 'M152,76 L152,106',
       poses: [
-        { hip: [96, 82], sh: [96, 48], hd: [96, 34], el: [99, 72], wr: [102, 94], elF: [93, 72], wrF: [90, 94], kn: [104, 110], an: [106, 138], toe: [119, 138], knF: [84, 112], anF: [56, 112], toeF: [40, 104] },
-        { hip: [96, 98], sh: [96, 64], hd: [96, 50], el: [99, 88], wr: [102, 110], elF: [93, 88], wrF: [90, 110], kn: [114, 116], an: [106, 138], toe: [119, 138], knF: [80, 128], anF: [52, 116], toeF: [38, 106] },
+        // pied avant à plat au sol dans les deux positions
+        { hip: [96, 82], sh: [96, 48], hd: [96, 34], el: [99, 72], wr: [102, 94], elF: [93, 72], wrF: [90, 94], kn: [103, 110], an: [106, 137], toe: [119, 138], knF: [84, 112], anF: [56, 112], toeF: [40, 104] },
+        { hip: [96, 98], sh: [96, 64], hd: [96, 50], el: [99, 88], wr: [102, 110], elF: [93, 88], wrF: [90, 110], kn: [121, 113], an: [106, 136], toe: [119, 137], knF: [80, 128], anF: [52, 116], toeF: [38, 106] },
       ],
     },
 
